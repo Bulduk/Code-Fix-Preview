@@ -1,0 +1,8 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "frZAyr1a5FzbjPNme9XCv"
+uri = "file://attached_assets/nexus-trade-os-fixed.zip"
+type = "unspecified"
+title = "Nexus Trade OS — Düzeltilmiş Kaynak Kod"
