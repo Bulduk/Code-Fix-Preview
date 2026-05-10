@@ -6,3 +6,9 @@ id = "frZAyr1a5FzbjPNme9XCv"
 uri = "file://attached_assets/nexus-trade-os-fixed.zip"
 type = "unspecified"
 title = "Nexus Trade OS — Düzeltilmiş Kaynak Kod"
+
+[[outputs]]
+id = "r2D3mnFziwLLKLH2XziRJ"
+uri = "file://attached_assets/nexus-trade-os-v2.zip"
+type = "unspecified"
+title = "Nexus Trade OS v2 — Tam Entegrasyon Paketi"

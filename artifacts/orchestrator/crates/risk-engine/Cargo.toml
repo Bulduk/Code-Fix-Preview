@@ -1,0 +1,14 @@
+[package]
+name = "nexus-risk"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "nexus_risk"
+crate-type = ["cdylib"]
+
+[dependencies]
+pyo3 = { version = "0.22", features = ["extension-module"] }
+polars = { version = "0.44", features = ["lazy", "dtype-full"] }
+tokio = { version = "1", features = ["full"] }
+serde = { version = "1", features = ["derive"] }
