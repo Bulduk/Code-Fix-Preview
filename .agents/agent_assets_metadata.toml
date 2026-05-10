@@ -12,3 +12,9 @@ id = "r2D3mnFziwLLKLH2XziRJ"
 uri = "file://attached_assets/nexus-trade-os-v2.zip"
 type = "unspecified"
 title = "Nexus Trade OS v2 — Tam Entegrasyon Paketi"
+
+[[outputs]]
+id = "J-YvWrufvixcvxhhSnGET"
+uri = "file://nexus-trade-os-final.zip"
+type = "unspecified"
+title = "Nexus Trade OS — Final ZIP (85 dosya, 124 KB)"

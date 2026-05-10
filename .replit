@@ -30,3 +30,17 @@ externalPort = 80
 [[ports]]
 localPort = 23331
 externalPort = 3000
+
+[userenv]
+
+[userenv.shared]
+
+[userenv.development]
+"OKX_API_KEY," = "625922af-d1fd-4f2e-85ad-a990abd2712b"
+OKX_PASSPHRASE = "100910OcaK@@"
+OKX_SECRET = "FF7782F53812883CECCBBCC31F837432"
+
+[userenv.production]
+"OKX_API_KEY," = "625922af-d1fd-4f2e-85ad-a990abd2712b"
+OKX_PASSPHRASE = "100910OcaK@@"
+OKX_SECRET = "FF7782F53812883CECCBBCC31F837432"
