@@ -67,11 +67,13 @@ export default function Shell({ children }: { children: React.ReactNode }) {
           {NAV.map(({ href, icon: Icon, label }) => {
             const active = path === href || (href !== "/" && path.startsWith(href));
             return (
-              <Link key={href} href={href}>
-                <a className={`flex flex-col items-center py-2 text-[11px] gap-0.5 ${active ? "text-accent" : "text-text-dim"}`}>
-                  <Icon size={20} />
-                  {label}
-                </a>
+              <Link
+                key={href}
+                href={href}
+                className={`flex flex-col items-center py-2 text-[11px] gap-0.5 ${active ? "text-accent" : "text-text-dim"}`}
+              >
+                <Icon size={20} />
+                {label}
               </Link>
             );
           })}

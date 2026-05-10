@@ -14,16 +14,18 @@ export default function Admin() {
       <h1 className="text-lg font-semibold text-text">Admin Paneli</h1>
       <div className="grid grid-cols-2 gap-3">
         {cards.map((c) => (
-          <Link key={c.href} href={c.href}>
-            <a className="bg-bg-elev border border-line rounded-xl p-4 hover:bg-bg-soft transition flex gap-3 items-start">
-              <div className="w-8 h-8 rounded-lg bg-accent/10 grid place-items-center mt-0.5 shrink-0">
-                <c.icon size={15} className="text-accent" />
-              </div>
-              <div>
-                <div className="font-medium text-text">{c.title}</div>
-                <div className="text-text-dim text-xs mt-0.5">{c.desc}</div>
-              </div>
-            </a>
+          <Link
+            key={c.href}
+            href={c.href}
+            className="bg-bg-elev border border-line rounded-xl p-4 hover:bg-bg-soft transition flex gap-3 items-start"
+          >
+            <div className="w-8 h-8 rounded-lg bg-accent/10 grid place-items-center mt-0.5 shrink-0">
+              <c.icon size={15} className="text-accent" />
+            </div>
+            <div>
+              <div className="font-medium text-text">{c.title}</div>
+              <div className="text-text-dim text-xs mt-0.5">{c.desc}</div>
+            </div>
           </Link>
         ))}
       </div>
