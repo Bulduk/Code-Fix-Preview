@@ -17,4 +17,10 @@ title = "Nexus Trade OS v2 — Tam Entegrasyon Paketi"
 id = "J-YvWrufvixcvxhhSnGET"
 uri = "file://nexus-trade-os-final.zip"
 type = "unspecified"
-title = "Nexus Trade OS — Final ZIP (85 dosya, 124 KB)"
+title = "Nexus Trade OS — Final ZIP (rapor dahil, 86 dosya)"
+
+[[outputs]]
+id = "5T-fOAD1G1uecVGI_Ja6D"
+uri = "file://nexus-trade-os-rapor.md"
+type = "text"
+title = "Nexus Trade OS — Sistem Analiz Raporu"
