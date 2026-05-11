@@ -1,25 +1,20 @@
-import app from "./app";
-import { logger } from "./lib/logger";
+import { createServer } from "http";
+import app from "./app.js";
+import { logger } from "./lib/logger.js";
+import { initWsHub } from "./lib/ws-hub.js";
+import { seedDefaults } from "./lib/seed.js";
 
 const rawPort = process.env["PORT"];
-
-if (!rawPort) {
-  throw new Error(
-    "PORT environment variable is required but was not provided.",
-  );
-}
+if (!rawPort) throw new Error("PORT environment variable is required but was not provided.");
 
 const port = Number(rawPort);
+if (Number.isNaN(port) || port <= 0) throw new Error(`Invalid PORT value: "${rawPort}"`);
 
-if (Number.isNaN(port) || port <= 0) {
-  throw new Error(`Invalid PORT value: "${rawPort}"`);
-}
+const server = createServer(app);
+initWsHub(server);
 
-app.listen(port, (err) => {
-  if (err) {
-    logger.error({ err }, "Error listening on port");
-    process.exit(1);
-  }
-
-  logger.info({ port }, "Server listening");
+server.listen(port, () => {
+  logger.info({ port }, "Nexus API Server + WS Hub listening");
+  // DB hazır olduğunda varsayılan verileri seed et
+  seedDefaults().catch((e) => logger.warn({ err: e }, "seedDefaults failed"));
 });

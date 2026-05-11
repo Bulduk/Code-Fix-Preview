@@ -1,8 +1,9 @@
-import { useEffect, useCallback, useState } from "react";
+import { useEffect, useCallback, useState, useRef } from "react";
 import { Link, useLocation } from "wouter";
 import { LayoutDashboard, LineChart, Bot, Settings, Plus, X, Command, Zap } from "lucide-react";
 import { useStore, TradeMode } from "@/lib/store";
 import { startMockFeed } from "@/lib/mock";
+import { api } from "@/lib/api";
 
 const TRADE_MODE_LABELS: Record<TradeMode, { label: string; color: string; short: string }> = {
   manual:    { label: "Manuel",    short: "M",  color: "bg-slate-100 text-slate-600 border-slate-200" },
@@ -23,6 +24,7 @@ const FAB_ITEMS = [
   { label: "Orkestratör",     href: "/orch",            icon: "⚡" },
   { label: "Risk Yönetici",   href: "/risk",            icon: "🛡️" },
   { label: "PnL Raporu",      href: "/pnl",             icon: "💰" },
+  { label: "Pluginler",       href: "/admin/plugins",   icon: "🔌" },
   { label: "Telegram",        href: "/admin/telegram",  icon: "📱" },
   { label: "Sistem Ayarları", href: "/admin/settings",  icon: "⚙️" },
 ];
@@ -45,8 +47,11 @@ export default function Shell({ children }: { children: React.ReactNode }) {
   const { token, applyEvent, strongSignal, dismissStrongSignal,
           pendingApprovals, okxConnected, systemConfig, setSystemConfig } = useStore();
   const tm = TRADE_MODE_LABELS[systemConfig.tradeMode ?? "semi_auto"];
-  const [fabOpen, setFabOpen]       = useState(false);
+  const [fabOpen, setFabOpen]         = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [modeSyncing, setModeSyncing] = useState(false);
+  const [modeWarning, setModeWarning] = useState<string | null>(null);
+  const warnTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const applyEventStable = useCallback(applyEvent, []);
 
@@ -94,18 +99,31 @@ export default function Shell({ children }: { children: React.ReactNode }) {
             )}
           </div>
           <div className="flex items-center gap-2">
-            {/* Trade Mode Cycler */}
+            {/* Trade Mode Cycler — backend sync */}
             <button
-              onClick={() => {
+              disabled={modeSyncing}
+              onClick={async () => {
                 const order: TradeMode[] = ["manual","semi_auto","full_auto"];
                 const cur  = systemConfig.tradeMode ?? "semi_auto";
                 const next = order[(order.indexOf(cur) + 1) % order.length];
+                // Optimistic update
                 setSystemConfig({ tradeMode: next });
+                setModeSyncing(true);
+                try {
+                  const r = await api.setTradeMode(next);
+                  if (r.warning) {
+                    setModeWarning(r.warning);
+                    if (warnTimer.current) clearTimeout(warnTimer.current);
+                    warnTimer.current = setTimeout(() => setModeWarning(null), 5000);
+                  }
+                } catch { /* optimistic update zaten yapıldı */ }
+                finally { setModeSyncing(false); }
               }}
-              title="Trade modunu değiştir"
-              className={`flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full border font-semibold transition hover:opacity-80 ${tm.color}`}
+              title="Trade modunu değiştir — backend ile senkronize"
+              className={`flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full border font-semibold transition ${modeSyncing ? "opacity-50 cursor-wait" : "hover:opacity-80"} ${tm.color}`}
             >
-              <Zap size={9} />{tm.label}
+              <Zap size={9} className={modeSyncing ? "animate-spin" : ""} />
+              {tm.label}
             </button>
             {pendingCount > 0 && (
               <Link href="/admin/telegram" className="flex items-center gap-1 text-xs px-2 py-1 rounded-full bg-amber-100 text-amber-700 border border-amber-200 hover:bg-amber-200 transition">
@@ -152,6 +170,17 @@ export default function Shell({ children }: { children: React.ReactNode }) {
               <X size={13} />
             </button>
           </div>
+        </div>
+      )}
+
+      {/* Trade Mode Warning Banner */}
+      {modeWarning && (
+        <div className="bg-red-600 text-white text-xs text-center py-2 px-4 flex items-center justify-center gap-2">
+          <Zap size={12} className="shrink-0" />
+          <span>{modeWarning}</span>
+          <button onClick={() => setModeWarning(null)} className="ml-2 hover:opacity-70">
+            <X size={12} />
+          </button>
         </div>
       )}
 
@@ -248,20 +277,21 @@ function CommandPalette({ onClose }: { onClose: () => void }) {
 
   const run = (query?: string) => {
     const t = (query ?? q).trim().toLowerCase();
-    if (t.includes("home") || t === "/")         navigate("/");
-    else if (t.includes("market"))               navigate("/markets");
-    else if (t.includes("orch"))                 navigate("/orch");
-    else if (t.includes("risk"))                 navigate("/risk");
-    else if (t.includes("pnl"))                  navigate("/pnl");
-    else if (t.includes("agent"))                navigate("/agents");
+    if (t.includes("home") || t === "/")              navigate("/");
+    else if (t.includes("market"))                    navigate("/markets");
+    else if (t.includes("orch"))                      navigate("/orch");
+    else if (t.includes("risk"))                      navigate("/risk");
+    else if (t.includes("pnl"))                       navigate("/pnl");
+    else if (t.includes("agent"))                     navigate("/agents");
     else if (t.includes("trade") || t.includes("emir")) navigate("/trade");
-    else if (t.includes("telegram"))             navigate("/admin/telegram");
+    else if (t.includes("telegram"))                  navigate("/admin/telegram");
     else if (t.includes("exchange") || t.includes("borsa")) navigate("/admin/exchanges");
-    else if (t.includes("strat"))                navigate("/admin/strategies");
+    else if (t.includes("strat"))                     navigate("/admin/strategies");
+    else if (t.includes("plugin") || t.includes("eklenti")) navigate("/admin/plugins");
     else if (t.includes("setting") || t.includes("ayar")) navigate("/admin/settings");
-    else if (t.includes("user"))                 navigate("/admin/users");
-    else if (t.includes("audit"))                navigate("/admin/audit");
-    else if (t.includes("admin"))                navigate("/admin");
+    else if (t.includes("user"))                      navigate("/admin/users");
+    else if (t.includes("audit"))                     navigate("/admin/audit");
+    else if (t.includes("admin"))                     navigate("/admin");
     onClose();
   };
 

@@ -93,7 +93,7 @@ function StrategyModal({
                 </div>
                 <div>
                   <label className="text-xs text-text-dim">Zaman Dilimi</label>
-                  <select value={form.params?.timeframe ?? "15m"}
+                  <select value={(form.params?.["timeframe"] as string) ?? "15m"}
                     onChange={(e) => setParam("timeframe", e.target.value)}
                     className="w-full bg-bg-soft border border-line rounded-xl px-3 py-2 mt-1 text-sm text-text outline-none">
                     {TIMEFRAMES.map((t) => <option key={t}>{t}</option>)}
@@ -286,7 +286,7 @@ export default function Strategies() {
                     <span className="text-xs text-text-dim">·</span>
                     <span className="text-xs text-text-dim">%{s.allocation}</span>
                     <span className="text-xs text-text-dim">·</span>
-                    <span className="text-xs text-text-dim">{s.params?.timeframe}</span>
+                    <span className="text-xs text-text-dim">{s.params?.["timeframe"] as string}</span>
                     <span className="text-xs text-text-dim">·</span>
                     <span className="text-xs text-text-dim">{getExchangeLabel(s.exchange_id)}</span>
                     <span className={`text-[10px] px-1.5 py-0.5 rounded ${
@@ -321,13 +321,13 @@ export default function Strategies() {
               </div>
             </div>
             <div className="flex items-center gap-3 mt-2 text-[11px] text-text-dim flex-wrap">
-              <span>SL <span className="text-down font-semibold">%{s.params?.stop_loss_pct}</span></span>
-              <span>TP <span className="text-up font-semibold">%{s.params?.take_profit_pct}</span></span>
-              <span>Risk/işlem <span className="text-text font-semibold">%{s.params?.risk_per_trade_pct}</span></span>
-              <span>Max pos <span className="text-text font-semibold">{s.params?.max_positions}</span></span>
+              <span>SL <span className="text-down font-semibold">%{s.params?.["stop_loss_pct"] as number}</span></span>
+              <span>TP <span className="text-up font-semibold">%{s.params?.["take_profit_pct"] as number}</span></span>
+              <span>Risk/işlem <span className="text-text font-semibold">%{s.params?.["risk_per_trade_pct"] as number}</span></span>
+              <span>Max pos <span className="text-text font-semibold">{s.params?.["max_positions"] as number}</span></span>
               {Object.entries(s.params ?? {})
                 .filter(([k]) => !["timeframe","stop_loss_pct","take_profit_pct","risk_per_trade_pct","max_positions"].includes(k))
-                .map(([k, v]) => <span key={k}>{k} <span className="text-text font-semibold">{String(v)}</span></span>)}
+                .map(([k, v]) => <span key={k}>{k} <span className="text-text font-semibold">{String(v as string | number)}</span></span>)}
             </div>
           </div>
         ))}

@@ -41,8 +41,7 @@ function ExchangeModal({
   const [form, setForm] = useState<FormData>(
     exchange
       ? { exchange: exchange.exchange, label: exchange.label, mode: exchange.mode,
-          api_key: exchange.api_key ?? "", api_secret: exchange.api_secret ?? "",
-          passphrase: exchange.passphrase ?? "", is_active: exchange.is_active }
+          api_key: "", api_secret: "", passphrase: "", is_active: exchange.is_active }
       : EMPTY_FORM
   );
   const [saving, setSaving] = useState(false);
@@ -193,12 +192,12 @@ export default function Exchanges() {
                 <div className="text-sm font-semibold text-text capitalize">{a.exchange} · {a.label}</div>
                 <div className="flex items-center gap-2 mt-0.5">
                   <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${MODE_COLORS[a.mode]}`}>{a.mode}</span>
-                  {a.ws_connected ? (
-                    <span className="flex items-center gap-1 text-[10px] text-up"><Wifi size={9} /> {a.latency_ms}ms</span>
+                  {a.wsConnected ? (
+                    <span className="flex items-center gap-1 text-[10px] text-up"><Wifi size={9} /> {a.latencyMs}ms</span>
                   ) : (
                     <span className="flex items-center gap-1 text-[10px] text-text-dim"><WifiOff size={9} /> bağlı değil</span>
                   )}
-                  {a.api_key && <span className="text-[10px] text-text-dim">API ✓</span>}
+                  {a.hasApiKey && <span className="text-[10px] text-text-dim">API ✓</span>}
                 </div>
               </div>
             </div>

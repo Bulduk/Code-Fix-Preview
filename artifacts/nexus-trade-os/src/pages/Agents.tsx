@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useStore } from "@/lib/store";
-import { api, Agent, Exchange } from "@/lib/api";
+import { api, Agent, Exchange, MarketType } from "@/lib/api";
 import { Bot, Send, Loader2, Power, Cpu, Zap, X, Anchor, BrainCircuit } from "lucide-react";
 
 type ChatMsg = { role: "user" | "assistant"; text: string };
@@ -372,6 +372,30 @@ export default function Agents() {
                 </div>
               </div>
             )}
+
+            {/* Market Type Assignment */}
+            <div>
+              <label className="text-xs text-text-dim block mb-1.5">Piyasa Tipleri</label>
+              <div className="flex flex-wrap gap-1.5">
+                {(["spot","perp","futures","margin","polymarket"] as MarketType[]).map((mt) => {
+                  const selected = (editDraft.market_types ?? []).includes(mt);
+                  const emoji = { spot:"🔵", perp:"⚡", futures:"📅", margin:"⚖️", polymarket:"🎯" }[mt];
+                  return (
+                    <button key={mt}
+                      onClick={() => {
+                        const cur = editDraft.market_types ?? [];
+                        const next = selected ? cur.filter((x) => x !== mt) : [...cur, mt];
+                        setEditDraft({ ...editDraft, market_types: next });
+                      }}
+                      className={`flex items-center gap-1 px-2.5 py-1 rounded-full border text-xs font-medium transition ${
+                        selected ? "bg-accent/10 border-accent/30 text-accent" : "bg-bg-soft border-line text-text-dim hover:bg-line"
+                      }`}>
+                      {emoji} {mt}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
 
             {/* Exchange assignment */}
             {editDraft.agent_type !== "nautilus" && exchanges.length > 0 && (

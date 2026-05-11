@@ -21,6 +21,7 @@
     "jose": "^6.2.3",
     "pino": "^9",
     "pino-http": "^10",
+    "protobufjs": "^8.2.0",
     "ws": "^8.20.0"
   },
   "devDependencies": {
