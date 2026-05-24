@@ -53,9 +53,10 @@ app.use((_req, res) => {
 });
 
 // Global error handler
-app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
-  logger.error({ err }, "Unhandled error");
-  res.status(500).json({ error: "Sunucu hatası" });
+app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  const message = err instanceof Error ? err.message : "Sunucu hatası";
+  logger.error({ err }, "Unhandled application error");
+  res.status(500).json({ error: message });
 });
 
 export default app;
