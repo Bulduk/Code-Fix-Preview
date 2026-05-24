@@ -1,9 +1,10 @@
 import { useEffect, useCallback, useState, useRef } from "react";
 import { Link, useLocation } from "wouter";
-import { LayoutDashboard, LineChart, Bot, Settings, Plus, X, Command, Zap } from "lucide-react";
+import { LayoutDashboard, LineChart, Bot, Settings, Plus, X, Command, Zap, Moon, Sun, Bell } from "lucide-react";
 import { useStore, TradeMode } from "@/lib/store";
 import { startMockFeed } from "@/lib/mock";
 import { api } from "@/lib/api";
+import { useWsHub } from "@/hooks/useWsHub";
 
 const TRADE_MODE_LABELS: Record<TradeMode, { label: string; color: string; short: string }> = {
   manual:    { label: "Manuel",    short: "M",  color: "bg-slate-100 text-slate-600 border-slate-200" },
@@ -45,15 +46,28 @@ const CMD_SHORTCUTS = [
 export default function Shell({ children }: { children: React.ReactNode }) {
   const [path] = useLocation();
   const { token, applyEvent, strongSignal, dismissStrongSignal,
-          pendingApprovals, okxConnected, systemConfig, setSystemConfig } = useStore();
+          pendingApprovals, okxConnected, systemConfig, setSystemConfig,
+          notifications, dismissNotification } = useStore();
+  const [notifOpen, setNotifOpen] = useState(false);
   const tm = TRADE_MODE_LABELS[systemConfig.tradeMode ?? "semi_auto"];
   const [fabOpen, setFabOpen]         = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [modeSyncing, setModeSyncing] = useState(false);
   const [modeWarning, setModeWarning] = useState<string | null>(null);
+  const [darkMode, setDarkMode]       = useState(() => {
+    try { return localStorage.getItem("nexus_dark") === "1"; } catch { return false; }
+  });
   const warnTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  useEffect(() => {
+    document.documentElement.classList.toggle("dark", darkMode);
+    try { localStorage.setItem("nexus_dark", darkMode ? "1" : "0"); } catch {}
+  }, [darkMode]);
+
   const applyEventStable = useCallback(applyEvent, []);
+
+  // Connect to backend WS hub (real OKX data + sim ticks from server)
+  useWsHub();
 
   useEffect(() => {
     if (!token) return;
@@ -131,6 +145,58 @@ export default function Shell({ children }: { children: React.ReactNode }) {
                 onay
               </Link>
             )}
+            {/* Bildirim Merkezi */}
+            <div className="relative">
+              <button
+                onClick={() => setNotifOpen((v) => !v)}
+                className="relative p-1.5 rounded-lg bg-bg-elev border border-line text-text-dim hover:bg-bg-soft transition"
+                title="Bildirimler"
+              >
+                <Bell size={14} />
+                {notifications.filter((n) => !n.dismissed).length > 0 && (
+                  <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-accent text-white text-[9px] grid place-items-center font-bold">
+                    {notifications.filter((n) => !n.dismissed).length}
+                  </span>
+                )}
+              </button>
+              {notifOpen && (
+                <div className="absolute right-0 top-10 w-72 bg-bg-elev border border-line rounded-2xl shadow-xl z-50 overflow-hidden">
+                  <div className="px-3 py-2 border-b border-line flex items-center justify-between">
+                    <span className="text-xs font-semibold text-text">Bildirimler</span>
+                    <button onClick={() => setNotifOpen(false)} className="p-0.5 rounded hover:bg-bg-soft text-text-dim"><X size={12} /></button>
+                  </div>
+                  <div className="max-h-64 overflow-auto divide-y divide-line">
+                    {notifications.filter((n) => !n.dismissed).length === 0 && (
+                      <div className="px-3 py-4 text-center text-xs text-text-dim">Bildirim yok</div>
+                    )}
+                    {notifications.filter((n) => !n.dismissed).slice(0, 10).map((n) => (
+                      <div key={n.id} className="px-3 py-2.5 flex items-start gap-2 hover:bg-bg-soft transition">
+                        <div className={`w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 ${
+                          n.type === "signal" ? "bg-amber-500" :
+                          n.type === "order"  ? "bg-up" :
+                          n.type === "risk"   ? "bg-down" : "bg-accent"
+                        }`} />
+                        <div className="flex-1 min-w-0">
+                          <div className="text-xs font-semibold text-text">{n.title}</div>
+                          <div className="text-[10px] text-text-dim mt-0.5 truncate">{n.body}</div>
+                          <div className="text-[9px] text-text-dim mt-0.5">{new Date(n.ts).toLocaleTimeString("tr-TR")}</div>
+                        </div>
+                        <button onClick={() => dismissNotification(n.id)} className="p-0.5 rounded hover:bg-line text-text-dim shrink-0">
+                          <X size={10} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+            <button
+              onClick={() => setDarkMode((v) => !v)}
+              title={darkMode ? "Açık mod" : "Koyu mod"}
+              className="p-1.5 rounded-lg bg-bg-elev border border-line text-text-dim hover:bg-bg-soft transition"
+            >
+              {darkMode ? <Sun size={14} /> : <Moon size={14} />}
+            </button>
             <button
               onClick={() => setPaletteOpen(true)}
               className="flex items-center gap-1.5 text-text-dim text-xs px-3 py-1.5 rounded-lg bg-bg-elev border border-line hover:bg-bg-soft transition"

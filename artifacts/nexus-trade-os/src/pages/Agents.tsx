@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useStore } from "@/lib/store";
 import { api, Agent, Exchange, MarketType } from "@/lib/api";
-import { Bot, Send, Loader2, Power, Cpu, Zap, X, Anchor, BrainCircuit } from "lucide-react";
+import { Bot, Send, Loader2, Power, Cpu, Zap, X, Anchor, BrainCircuit, Plus, Trash2, RefreshCw } from "lucide-react";
 
 type ChatMsg = { role: "user" | "assistant"; text: string };
 
@@ -52,11 +52,22 @@ export default function Agents() {
   const [editOpen, setEditOpen]   = useState(false);
   const [editDraft, setEditDraft] = useState<Partial<Agent>>({});
 
+  const loadAgents = () => {
+    if (!token) return;
+    api.getAgents().then((a) => { setList(a); setSel((prev) => prev ? (a.find((x) => x.id === prev.id) ?? a[0] ?? null) : (a.find((x) => x.active) ?? a[0] ?? null)); });
+  };
+
   useEffect(() => {
     if (!token) return;
-    api.getAgents().then((a) => { setList(a); setSel(a.find((x) => x.active) ?? a[0] ?? null); });
+    loadAgents();
     api.getExchanges().then(setExchanges);
   }, [token]);
+
+  const deleteAgent = async (a: Agent) => {
+    if (!confirm(`"${a.name}" ajanını silmek istiyor musun?`)) return;
+    await api.deleteAgent(a.id);
+    loadAgents();
+  };
 
   const invoke = async (text?: string) => {
     const q = (text ?? msg).trim();
@@ -97,9 +108,15 @@ export default function Agents() {
 
   return (
     <div className="space-y-3">
-      <div>
-        <h1 className="text-lg font-bold text-text">AI Ajanlar</h1>
-        <p className="text-xs text-text-dim">Claude · Gemini · GPT · NautilusAgent — LangGraph orkestrasyonu</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-lg font-bold text-text">AI Ajanlar</h1>
+          <p className="text-xs text-text-dim">Claude · Gemini · GPT · NautilusAgent — LangGraph orkestrasyonu</p>
+        </div>
+        <button onClick={loadAgents}
+          className="p-1.5 rounded-lg border border-line bg-bg-elev text-text-dim hover:bg-bg-soft transition">
+          <RefreshCw size={13} />
+        </button>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3" style={{ minHeight: 520 }}>
@@ -163,6 +180,12 @@ export default function Agents() {
                       className="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] bg-bg-soft text-text-dim hover:bg-line transition"
                     >
                       <Cpu size={9} /> Düzenle
+                    </button>
+                    <button
+                      onClick={() => deleteAgent(a)}
+                      className="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] bg-bg-soft text-down/70 hover:bg-red-50 hover:text-down transition"
+                    >
+                      <Trash2 size={9} />
                     </button>
                   </div>
                 </li>
