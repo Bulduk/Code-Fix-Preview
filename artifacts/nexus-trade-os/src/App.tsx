@@ -1,89 +1,146 @@
-import { Switch, Route, Router as WouterRouter, Redirect } from "wouter";
-import Shell from "@/components/Shell";
-import { useStore } from "@/lib/store";
-import Login from "@/pages/Login";
-import Home from "@/pages/Home";
-import Markets from "@/pages/Markets";
-import Trade from "@/pages/Trade";
-import PnL from "@/pages/PnL";
-import Agents from "@/pages/Agents";
-import Orchestrator from "@/pages/Orchestrator";
-import RiskManager from "@/pages/RiskManager";
-import Admin from "@/pages/admin/Admin";
-import Exchanges from "@/pages/admin/Exchanges";
-import Strategies from "@/pages/admin/Strategies";
-import Users from "@/pages/admin/Users";
-import Audit from "@/pages/admin/Audit";
-import TelegramSettings from "@/pages/admin/TelegramSettings";
-import SystemSettings from "@/pages/admin/SystemSettings";
-import Plugins from "@/pages/admin/Plugins";
+import { useEffect, useState, type ComponentType } from "react";
 
-function PrivateRoute({ children }: { children: React.ReactNode }) {
-  const token = useStore((s) => s.token);
-  if (!token) return <Redirect to="/login" />;
-  return <Shell>{children}</Shell>;
-}
+import { modules as discoveredModules } from "./.generated/mockup-components";
 
-function Router() {
+type ModuleMap = Record<string, () => Promise<Record<string, unknown>>>;
+
+function _resolveComponent(
+  mod: Record<string, unknown>,
+  name: string,
+): ComponentType | undefined {
+  const fns = Object.values(mod).filter(
+    (v) => typeof v === "function",
+  ) as ComponentType[];
   return (
-    <Switch>
-      <Route path="/login" component={Login} />
-      <Route path="/">
-        {() => <PrivateRoute><Home /></PrivateRoute>}
-      </Route>
-      <Route path="/markets">
-        {() => <PrivateRoute><Markets /></PrivateRoute>}
-      </Route>
-      <Route path="/trade">
-        {() => <PrivateRoute><Trade /></PrivateRoute>}
-      </Route>
-      <Route path="/pnl">
-        {() => <PrivateRoute><PnL /></PrivateRoute>}
-      </Route>
-      <Route path="/agents">
-        {() => <PrivateRoute><Agents /></PrivateRoute>}
-      </Route>
-      <Route path="/orch">
-        {() => <PrivateRoute><Orchestrator /></PrivateRoute>}
-      </Route>
-      <Route path="/risk">
-        {() => <PrivateRoute><RiskManager /></PrivateRoute>}
-      </Route>
-      <Route path="/admin">
-        {() => <PrivateRoute><Admin /></PrivateRoute>}
-      </Route>
-      <Route path="/admin/exchanges">
-        {() => <PrivateRoute><Exchanges /></PrivateRoute>}
-      </Route>
-      <Route path="/admin/strategies">
-        {() => <PrivateRoute><Strategies /></PrivateRoute>}
-      </Route>
-      <Route path="/admin/users">
-        {() => <PrivateRoute><Users /></PrivateRoute>}
-      </Route>
-      <Route path="/admin/audit">
-        {() => <PrivateRoute><Audit /></PrivateRoute>}
-      </Route>
-      <Route path="/admin/telegram">
-        {() => <PrivateRoute><TelegramSettings /></PrivateRoute>}
-      </Route>
-      <Route path="/admin/settings">
-        {() => <PrivateRoute><SystemSettings /></PrivateRoute>}
-      </Route>
-      <Route path="/admin/plugins">
-        {() => <PrivateRoute><Plugins /></PrivateRoute>}
-      </Route>
-      <Route>
-        {() => <Redirect to="/" />}
-      </Route>
-    </Switch>
+    (mod.default as ComponentType) ||
+    (mod.Preview as ComponentType) ||
+    (mod[name] as ComponentType) ||
+    fns[fns.length - 1]
   );
 }
 
-export default function App() {
+function PreviewRenderer({
+  componentPath,
+  modules,
+}: {
+  componentPath: string;
+  modules: ModuleMap;
+}) {
+  const [Component, setComponent] = useState<ComponentType | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    setComponent(null);
+    setError(null);
+
+    async function loadComponent(): Promise<void> {
+      const key = `./components/mockups/${componentPath}.tsx`;
+      const loader = modules[key];
+      if (!loader) {
+        setError(`No component found at ${componentPath}.tsx`);
+        return;
+      }
+
+      try {
+        const mod = await loader();
+        if (cancelled) {
+          return;
+        }
+        const name = componentPath.split("/").pop()!;
+        const comp = _resolveComponent(mod, name);
+        if (!comp) {
+          setError(
+            `No exported React component found in ${componentPath}.tsx\n\nMake sure the file has at least one exported function component.`,
+          );
+          return;
+        }
+        setComponent(() => comp);
+      } catch (e) {
+        if (cancelled) {
+          return;
+        }
+
+        const message = e instanceof Error ? e.message : String(e);
+        setError(`Failed to load preview.\n${message}`);
+      }
+    }
+
+    void loadComponent();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [componentPath, modules]);
+
+  if (error) {
+    return (
+      <pre style={{ color: "red", padding: "2rem", fontFamily: "system-ui" }}>
+        {error}
+      </pre>
+    );
+  }
+
+  if (!Component) return null;
+
+  return <Component />;
+}
+
+function getBasePath(): string {
+  return import.meta.env.BASE_URL.replace(/\/$/, "");
+}
+
+function getPreviewExamplePath(): string {
+  const basePath = getBasePath();
+  return `${basePath}/preview/ComponentName`;
+}
+
+function Gallery() {
   return (
-    <WouterRouter base={import.meta.env.BASE_URL?.replace(/\/$/, "") ?? ""}>
-      <Router />
-    </WouterRouter>
+    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-8">
+      <div className="text-center max-w-md">
+        <h1 className="text-2xl font-semibold text-gray-900 mb-3">
+          Component Preview Server
+        </h1>
+        <p className="text-gray-500 mb-4">
+          This server renders individual components for the workspace canvas.
+        </p>
+        <p className="text-sm text-gray-400">
+          Access component previews at{" "}
+          <code className="bg-gray-100 px-1.5 py-0.5 rounded text-gray-600">
+            {getPreviewExamplePath()}
+          </code>
+        </p>
+      </div>
+    </div>
   );
 }
+
+function getPreviewPath(): string | null {
+  const basePath = getBasePath();
+  const { pathname } = window.location;
+  const local =
+    basePath && pathname.startsWith(basePath)
+      ? pathname.slice(basePath.length) || "/"
+      : pathname;
+  const match = local.match(/^\/preview\/(.+)$/);
+  return match ? match[1] : null;
+}
+
+function App() {
+  const previewPath = getPreviewPath();
+
+  if (previewPath) {
+    return (
+      <PreviewRenderer
+        componentPath={previewPath}
+        modules={discoveredModules}
+      />
+    );
+  }
+
+  return <Gallery />;
+}
+
+export default App;
