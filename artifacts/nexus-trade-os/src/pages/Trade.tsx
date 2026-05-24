@@ -1,11 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { useStore } from "@/lib/store";
 import { api, OrderRecord } from "@/lib/api";
-import {
-  TrendingUp, TrendingDown, Clock, RefreshCw, Loader2,
-  CheckCircle2, Circle, AlertCircle, Shield, ChevronDown, ChevronUp,
-  Zap, Target, BarChart3,
-} from "lucide-react";
 
 function getSearchParam(key: string): string {
   if (typeof window === "undefined") return "";
@@ -13,49 +8,108 @@ function getSearchParam(key: string): string {
 }
 
 const STATUS_COLORS: Record<string, string> = {
-  filled:    "bg-green-100 text-green-700",
-  open:      "bg-blue-100 text-blue-700",
-  pending:   "bg-amber-100 text-amber-700",
-  cancelled: "bg-bg-soft text-text-dim",
-  rejected:  "bg-red-100 text-red-700",
-  partial:   "bg-purple-100 text-purple-700",
+  filled:    "badge-up",
+  open:      "bg-[var(--color-accent2)]/10 text-[var(--color-accent2)] border border-[var(--color-accent2)]/20",
+  pending:   "bg-[var(--color-accent)]/10 text-[var(--color-accent)] border border-[var(--color-accent)]/20",
+  cancelled: "badge-neutral",
+  rejected:  "badge-down",
+  partial:   "bg-purple-500/10 text-purple-400 border border-purple-500/20",
 };
 
-const STATUS_ICONS: Record<string, React.ElementType> = {
-  filled:    CheckCircle2,
-  open:      Circle,
-  pending:   Loader2,
-  cancelled: AlertCircle,
-  rejected:  AlertCircle,
-  partial:   Circle,
-};
+const EXCHANGE = "binance";
 
-const EXCHANGES = ["binance", "bybit", "okx", "coinbase", "kraken"];
-const SYMBOLS   = [
-  "BTCUSDT","ETHUSDT","SOLUSDT","BNBUSDT","XRPUSDT",
-  "ADAUSDT","DOGEUSDT","LINKUSDT","ARBUSDT","MATICUSDT",
-  "AAVEUSDT","UNIUSDT","OPUSDT",
+const SYMBOLS = [
+  "BTCUSDT", "ETHUSDT", "BNBUSDT", "SOLUSDT", "XRPUSDT",
+  "ADAUSDT", "DOGEUSDT", "LINKUSDT", "ARBUSDT", "MATICUSDT",
+  "AAVEUSDT", "UNIUSDT", "OPUSDT",
 ];
 
-// Mini sparkline bileşeni
-function MiniSparkline({ change }: { change: number }) {
-  const up = change >= 0;
-  const pts = Array.from({ length: 12 }, (_, i) => {
-    const noise = (Math.random() - 0.5) * 6;
-    return 20 - (i / 11) * change * 100 + noise;
-  }).reverse();
-  const min = Math.min(...pts);
-  const max = Math.max(...pts);
-  const norm = (v: number) => ((v - min) / (max - min || 1)) * 28;
-  const d = pts.map((v, i) => `${i === 0 ? "M" : "L"}${(i / 11) * 120},${28 - norm(v)}`).join(" ");
+function generateOrderbook(midPrice: number) {
+  const asks: { px: number; qty: number; total: number }[] = [];
+  const bids: { px: number; qty: number; total: number }[] = [];
+  let askTotal = 0;
+  let bidTotal = 0;
+  for (let i = 0; i < 12; i++) {
+    const spread = midPrice * 0.00008 * (i + 1);
+    const askPx  = midPrice + spread;
+    const bidPx  = midPrice - spread;
+    const askQty = Number((Math.random() * 2.5 + 0.05).toFixed(4));
+    const bidQty = Number((Math.random() * 2.5 + 0.05).toFixed(4));
+    askTotal += askQty;
+    bidTotal += bidQty;
+    asks.push({ px: askPx, qty: askQty, total: askTotal });
+    bids.push({ px: bidPx, qty: bidQty, total: bidTotal });
+  }
+  return { asks, bids };
+}
+
+function Orderbook({ midPrice, onPriceClick }: { midPrice: number; onPriceClick: (px: number) => void }) {
+  const { asks, bids } = useMemo(() => generateOrderbook(midPrice), [Math.floor(midPrice * 10)]);
+  const maxTotal = Math.max(...asks.map((a) => a.total), ...bids.map((b) => b.total));
+
   return (
-    <svg viewBox="0 0 120 30" className="w-20 h-5" preserveAspectRatio="none">
-      <path d={d} fill="none" stroke={up ? "#22c55e" : "#ef4444"} strokeWidth="1.5" />
-    </svg>
+    <div className="card overflow-hidden h-full flex flex-col">
+      <div className="px-3 py-2.5 border-b border-[var(--color-line)] flex items-center justify-between shrink-0">
+        <span className="text-sm font-bold text-[var(--color-text)]">Orderbook</span>
+        <span className="text-[10px] text-[var(--color-text-muted)] font-semibold">Binance · Simüle</span>
+      </div>
+
+      {/* Column headers */}
+      <div className="grid grid-cols-3 px-3 py-1.5 text-[10px] text-[var(--color-text-muted)] font-semibold uppercase tracking-wider border-b border-[var(--color-line)] shrink-0">
+        <span>Fiyat</span>
+        <span className="text-right">Miktar</span>
+        <span className="text-right">Toplam</span>
+      </div>
+
+      <div className="flex-1 overflow-hidden flex flex-col font-num text-[11px]">
+        {/* Asks — reversed */}
+        <div className="flex-1 overflow-hidden flex flex-col justify-end">
+          {[...asks].reverse().map((a, i) => (
+            <div
+              key={i}
+              onClick={() => onPriceClick(a.px)}
+              className="relative grid grid-cols-3 px-3 py-[3px] cursor-pointer hover:bg-[var(--color-down)]/5 transition"
+            >
+              <div
+                className="absolute right-0 top-0 bottom-0 bg-[var(--color-down)]/10"
+                style={{ width: `${(a.total / maxTotal) * 100}%` }}
+              />
+              <span className="text-[var(--color-down)] relative z-10 font-semibold">{a.px.toFixed(2)}</span>
+              <span className="text-right text-[var(--color-text)] relative z-10">{a.qty.toFixed(4)}</span>
+              <span className="text-right text-[var(--color-text-muted)] relative z-10">{a.total.toFixed(3)}</span>
+            </div>
+          ))}
+        </div>
+
+        {/* Spread / Mid price */}
+        <div className="px-3 py-2 bg-[var(--color-bg-soft)] border-y border-[var(--color-line)] flex items-center justify-between shrink-0">
+          <span className="text-base font-black text-[var(--color-text)] font-num">{midPrice.toFixed(2)}</span>
+          <span className="text-[10px] text-[var(--color-text-muted)]">Son Fiyat</span>
+        </div>
+
+        {/* Bids */}
+        <div className="flex-1 overflow-hidden">
+          {bids.map((b, i) => (
+            <div
+              key={i}
+              onClick={() => onPriceClick(b.px)}
+              className="relative grid grid-cols-3 px-3 py-[3px] cursor-pointer hover:bg-[var(--color-up)]/5 transition"
+            >
+              <div
+                className="absolute right-0 top-0 bottom-0 bg-[var(--color-up)]/10"
+                style={{ width: `${(b.total / maxTotal) * 100}%` }}
+              />
+              <span className="text-[var(--color-up)] relative z-10 font-semibold">{b.px.toFixed(2)}</span>
+              <span className="text-right text-[var(--color-text)] relative z-10">{b.qty.toFixed(4)}</span>
+              <span className="text-right text-[var(--color-text-muted)] relative z-10">{b.total.toFixed(3)}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
   );
 }
 
-// Risk hesaplama yardımcısı
 function calcRisk(qty: number, price: number, slPct: number, equity: number) {
   const positionValue = qty * price;
   const riskAmount    = positionValue * (slPct / 100);
@@ -64,10 +118,8 @@ function calcRisk(qty: number, price: number, slPct: number, equity: number) {
 }
 
 export default function Trade() {
-  const exParam  = getSearchParam("ex")  || "okx";
   const symParam = getSearchParam("sym") || "BTCUSDT";
 
-  const [ex,      setEx]      = useState(exParam);
   const [sym,     setSym]     = useState(symParam);
   const [side,    setSide]    = useState<"buy" | "sell">("buy");
   const [type,    setType]    = useState<"market" | "limit">("limit");
@@ -78,30 +130,29 @@ export default function Trade() {
   const [orders,  setOrders]  = useState<OrderRecord[]>([]);
   const [loadingOrders, setLoadingOrders] = useState(false);
 
-  // Gelişmiş emir seçenekleri
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [slEnabled,    setSlEnabled]    = useState(false);
   const [tpEnabled,    setTpEnabled]    = useState(false);
   const [slPct,        setSlPct]        = useState(2);
   const [tpPct,        setTpPct]        = useState(4);
   const [leverage,     setLeverage]     = useState(1);
-  const [orderNote,    setOrderNote]    = useState("");
 
-  const token  = useStore((s) => s.token);
-  const ticks  = useStore((s) => s.ticks);
-  const pnl    = useStore((s) => s.pnl);
+  const token        = useStore((s) => s.token);
+  const ticks        = useStore((s) => s.ticks);
+  const pnl          = useStore((s) => s.pnl);
+  const systemConfig = useStore((s) => s.systemConfig);
   const { applyEvent, riskConfig } = useStore();
 
-  const currentPx = ticks[`${ex}:${sym}`]?.px;
-  const tick       = ticks[`${ex}:${sym}`];
-  const up         = (tick?.change ?? 0) >= 0;
+  const tick      = ticks[`${EXCHANGE}:${sym}`] ?? ticks[`okx:${sym}`];
+  const currentPx = tick?.px;
+  const up        = (tick?.change ?? 0) >= 0;
+  const isPaperMode = systemConfig.paperTrading;
 
-  // Sembol değişince fiyatı güncelle
   useEffect(() => {
     if (currentPx && type === "limit" && !px) {
       setPx(currentPx.toFixed(2));
     }
-  }, [sym, ex]);
+  }, [sym]);
 
   const loadOrders = useCallback(async () => {
     if (!token) return;
@@ -115,28 +166,21 @@ export default function Trade() {
 
   useEffect(() => { loadOrders(); }, [token]);
 
-  // SL/TP fiyat hesaplama
   const entryPrice = type === "limit" ? Number(px) : (currentPx ?? 0);
-  const slPrice = side === "buy"
-    ? entryPrice * (1 - slPct / 100)
-    : entryPrice * (1 + slPct / 100);
-  const tpPrice = side === "buy"
-    ? entryPrice * (1 + tpPct / 100)
-    : entryPrice * (1 - tpPct / 100);
+  const slPrice = side === "buy" ? entryPrice * (1 - slPct / 100) : entryPrice * (1 + slPct / 100);
+  const tpPrice = side === "buy" ? entryPrice * (1 + tpPct / 100) : entryPrice * (1 - tpPct / 100);
 
-  // Risk hesaplama
   const equity = pnl?.equity ?? 10000;
   const { positionValue, riskAmount, riskPct } = useMemo(
     () => calcRisk(Number(qty), entryPrice, slEnabled ? slPct : riskConfig.stopLossPct, equity),
     [qty, entryPrice, slPct, slEnabled, equity, riskConfig.stopLossPct]
   );
 
-  // Risk rengi
   const riskColor = riskPct > riskConfig.riskPerTradePct * 2
-    ? "text-down"
+    ? "text-[var(--color-down)]"
     : riskPct > riskConfig.riskPerTradePct
-    ? "text-amber-600"
-    : "text-up";
+    ? "text-[var(--color-accent)]"
+    : "text-[var(--color-up)]";
 
   const submit = async () => {
     if (!token) return;
@@ -144,29 +188,20 @@ export default function Trade() {
     setFlash(null);
     try {
       const result = await api.placeOrder({
-        ex, sym, side, type, qty: Number(qty),
+        ex: EXCHANGE, sym, side, type, qty: Number(qty),
         px: type === "limit" ? Number(px) : currentPx ?? 0,
       });
       applyEvent({
-        t: "order",
-        id: result.id,
-        ex,
-        sym,
-        side,
-        type,
+        t: "order", id: result.id, ex: EXCHANGE, sym, side, type,
         qty: Number(qty),
         px: result.avgFillPx ?? (type === "limit" ? Number(px) : currentPx ?? 0),
-        status: result.status,
-        ts: Date.now(),
+        status: result.status, ts: Date.now(),
       });
       const paperTag = result.isPaper ? " [PAPER]" : "";
-      const slTag    = slEnabled ? ` · SL: $${slPrice.toFixed(2)}` : "";
-      const tpTag    = tpEnabled ? ` · TP: $${tpPrice.toFixed(2)}` : "";
-      setFlash({ msg: `${side === "buy" ? "Alım" : "Satım"} emri iletildi${paperTag}${slTag}${tpTag}`, ok: true });
+      setFlash({ msg: `${side === "buy" ? "Alım" : "Satım"} emri iletildi${paperTag}`, ok: true });
       await loadOrders();
     } catch (e) {
-      const errMsg = e instanceof Error ? e.message : "Bilinmeyen hata";
-      setFlash({ msg: `Emir hatası: ${errMsg}`, ok: false });
+      setFlash({ msg: `Hata: ${e instanceof Error ? e.message : "Bilinmeyen hata"}`, ok: false });
     } finally {
       setLoading(false);
     }
@@ -179,377 +214,378 @@ export default function Trade() {
 
   const recentOrders = orders.slice(0, 20);
 
-  // Kaldıraç için perp/futures sembolü mü?
-  const isPerpOrFutures = sym.includes("-PERP") || sym.includes("-MARGIN") || sym.match(/-\d{6}$/);
-
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+
+      {/* Header */}
+      <div className="flex items-center justify-between flex-wrap gap-2">
         <div>
-          <h1 className="text-lg font-bold text-text">Emir Gir</h1>
-          <p className="text-xs text-text-dim">CCXT Pro · Paper & Live · Risk Kontrollü</p>
+          <div className="flex items-center gap-2">
+            <h1 className="text-xl font-black text-[var(--color-text)]">Emir Gir</h1>
+            <span className={`text-[10px] px-2 py-1 rounded-lg font-bold border ${
+              isPaperMode
+                ? "bg-[var(--color-accent2)]/10 text-[var(--color-accent2)] border-[var(--color-accent2)]/20"
+                : "bg-[var(--color-up)]/10 text-[var(--color-up)] border-[var(--color-up)]/20"
+            }`}>
+              {isPaperMode ? "PAPER" : "LIVE"}
+            </span>
+            <span className="text-[10px] px-2 py-1 rounded-lg bg-[var(--color-accent)]/10 text-[var(--color-accent)] border border-[var(--color-accent)]/20 font-bold">
+              Binance
+            </span>
+          </div>
+          <p className="text-xs text-[var(--color-text-dim)] mt-0.5">CCXT Pro · Risk Kontrollü</p>
         </div>
-        {/* Risk özeti */}
-        <div className="flex items-center gap-2 text-xs">
-          <Shield size={12} className="text-accent" />
-          <span className="text-text-dim">SL: <span className="font-semibold text-text">{riskConfig.stopLossPct}%</span></span>
-          <span className="text-text-dim">Max Pos: <span className="font-semibold text-text">{riskConfig.maxOpenPositions}</span></span>
+        <div className="flex items-center gap-3 text-xs text-[var(--color-text-dim)]">
+          <span>SL: <span className="font-bold text-[var(--color-text)] font-num">{riskConfig.stopLossPct}%</span></span>
+          <span>Max Pos: <span className="font-bold text-[var(--color-text)] font-num">{riskConfig.maxOpenPositions}</span></span>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {/* ── Order Form ── */}
+      {/* 3-column layout */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+
+        {/* ── Col 1: Order Form ── */}
         <div className="space-y-3">
+
           {/* Price ticker */}
           {tick && (
-            <div className="bg-bg-elev border border-line rounded-2xl p-4 shadow-card">
+            <div className="card p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <div className="text-xs text-text-dim mb-0.5">{sym} · {ex}</div>
-                  <div className="text-2xl font-bold font-mono text-text">
+                  <div className="text-xs text-[var(--color-text-dim)] mb-1 font-semibold">{sym} · Binance</div>
+                  <div className="text-2xl font-black font-num text-[var(--color-text)]">
                     {tick.px < 1 ? tick.px.toFixed(4) : tick.px.toFixed(2)}
-                    <span className="text-sm font-normal text-text-dim ml-1">USDT</span>
+                    <span className="text-sm font-normal text-[var(--color-text-dim)] ml-1">USDT</span>
                   </div>
                 </div>
-                <div className="flex flex-col items-end gap-1">
-                  <div className={`flex items-center gap-1 text-sm font-semibold ${up ? "text-up" : "text-down"}`}>
-                    {up ? <TrendingUp size={16} /> : <TrendingDown size={16} />}
-                    {up ? "+" : ""}{((tick.change ?? 0) * 100).toFixed(2)}%
-                  </div>
-                  <MiniSparkline change={tick.change ?? 0} />
+                <div className={`text-sm font-bold font-num px-3 py-1.5 rounded-xl ${
+                  up
+                    ? "bg-[var(--color-up)]/10 text-[var(--color-up)]"
+                    : "bg-[var(--color-down)]/10 text-[var(--color-down)]"
+                }`}>
+                  {up ? "+" : ""}{((tick.change ?? 0) * 100).toFixed(2)}%
                 </div>
               </div>
-              {(tick.high24h || tick.low24h) && (
-                <div className="flex gap-4 mt-2 text-xs text-text-dim flex-wrap">
-                  {tick.high24h && <span>24h Yüksek: <span className="text-up font-mono">{tick.high24h.toFixed(2)}</span></span>}
-                  {tick.low24h  && <span>24h Düşük: <span className="text-down font-mono">{tick.low24h.toFixed(2)}</span></span>}
-                  {tick.vol24h  && <span>Hacim: <span className="text-text font-mono">${(tick.vol24h / 1e6).toFixed(0)}M</span></span>}
-                  {tick.rsi     && (
-                    <span>RSI: <span className={`font-mono font-semibold ${tick.rsi > 70 ? "text-down" : tick.rsi < 30 ? "text-up" : "text-text"}`}>{tick.rsi.toFixed(0)}</span></span>
-                  )}
+              {(tick.high24h || tick.low24h || tick.vol24h) && (
+                <div className="flex gap-3 mt-3 text-[10px] text-[var(--color-text-muted)] flex-wrap">
+                  {tick.high24h && <span>H: <span className="text-[var(--color-up)] font-num font-semibold">{tick.high24h.toFixed(2)}</span></span>}
+                  {tick.low24h  && <span>L: <span className="text-[var(--color-down)] font-num font-semibold">{tick.low24h.toFixed(2)}</span></span>}
+                  {tick.vol24h  && <span>Vol: <span className="text-[var(--color-text)] font-num font-semibold">${(tick.vol24h / 1e6).toFixed(0)}M</span></span>}
+                  {tick.rsi     && <span>RSI: <span className={`font-num font-bold ${tick.rsi > 70 ? "text-[var(--color-down)]" : tick.rsi < 30 ? "text-[var(--color-up)]" : "text-[var(--color-text)]"}`}>{tick.rsi.toFixed(0)}</span></span>}
                 </div>
               )}
             </div>
           )}
 
-          <div className="bg-bg-elev border border-line rounded-2xl p-4 shadow-card space-y-3">
-            {/* Exchange + Symbol */}
-            <div className="grid grid-cols-2 gap-2">
-              <div className="space-y-1">
-                <label className="text-xs text-text-dim font-medium">Borsa</label>
-                <select value={ex} onChange={(e) => setEx(e.target.value)}
-                  className="w-full bg-bg-soft border border-line px-3 py-2 rounded-xl text-sm text-text outline-none focus:border-accent">
-                  {EXCHANGES.map((x) => <option key={x}>{x}</option>)}
-                </select>
-              </div>
-              <div className="space-y-1">
-                <label className="text-xs text-text-dim font-medium">Sembol</label>
-                <select value={sym} onChange={(e) => { setSym(e.target.value); setPx(""); }}
-                  className="w-full bg-bg-soft border border-line px-3 py-2 rounded-xl text-sm text-text outline-none focus:border-accent">
-                  {SYMBOLS.map((s) => <option key={s}>{s}</option>)}
-                </select>
-              </div>
+          {/* Order Form */}
+          <div className="card p-4 space-y-3">
+
+            {/* Symbol */}
+            <div className="space-y-1.5">
+              <label className="text-[11px] text-[var(--color-text-dim)] font-semibold uppercase tracking-wider">Sembol</label>
+              <select
+                value={sym}
+                onChange={(e) => { setSym(e.target.value); setPx(""); }}
+                className="w-full bg-[var(--color-bg-soft)] border border-[var(--color-line)] px-3 py-2.5 rounded-xl text-sm text-[var(--color-text)] font-num font-semibold"
+              >
+                {SYMBOLS.map((s) => <option key={s}>{s}</option>)}
+              </select>
             </div>
 
-            {/* Side buttons */}
+            {/* Buy / Sell */}
             <div className="grid grid-cols-2 gap-2">
-              <button onClick={() => setSide("buy")}
-                className={`py-3 rounded-xl font-bold text-sm transition ${side === "buy" ? "bg-up text-white shadow-sm" : "bg-bg-soft text-text-dim border border-line hover:bg-line"}`}>
+              <button
+                onClick={() => setSide("buy")}
+                className={`py-3 rounded-xl font-black text-sm transition ${
+                  side === "buy"
+                    ? "bg-[var(--color-up)] text-white shadow-[0_4px_16px_rgba(14,203,129,0.3)]"
+                    : "bg-[var(--color-bg-soft)] text-[var(--color-text-dim)] border border-[var(--color-line)] hover:bg-[var(--color-line)]"
+                }`}
+              >
                 AL (BUY)
               </button>
-              <button onClick={() => setSide("sell")}
-                className={`py-3 rounded-xl font-bold text-sm transition ${side === "sell" ? "bg-down text-white shadow-sm" : "bg-bg-soft text-text-dim border border-line hover:bg-line"}`}>
+              <button
+                onClick={() => setSide("sell")}
+                className={`py-3 rounded-xl font-black text-sm transition ${
+                  side === "sell"
+                    ? "bg-[var(--color-down)] text-white shadow-[0_4px_16px_rgba(246,70,93,0.3)]"
+                    : "bg-[var(--color-bg-soft)] text-[var(--color-text-dim)] border border-[var(--color-line)] hover:bg-[var(--color-line)]"
+                }`}
+              >
                 SAT (SELL)
               </button>
             </div>
 
             {/* Order type */}
-            <div className="space-y-1">
-              <label className="text-xs text-text-dim font-medium">Emir Tipi</label>
-              <div className="flex gap-2">
-                {(["limit", "market"] as const).map((t) => (
-                  <button key={t} onClick={() => setType(t)}
-                    className={`flex-1 py-2 rounded-xl text-sm font-medium transition border ${type === t ? "bg-accent/10 border-accent/30 text-accent" : "bg-bg-soft border-line text-text-dim hover:bg-line"}`}>
-                    {t === "limit" ? "Limit" : "Market"}
+            <div className="flex gap-2">
+              {(["limit", "market"] as const).map((t) => (
+                <button
+                  key={t}
+                  onClick={() => setType(t)}
+                  className={`flex-1 py-2 rounded-xl text-xs font-bold transition border ${
+                    type === t
+                      ? "bg-[var(--color-accent)]/10 border-[var(--color-accent)]/30 text-[var(--color-accent)]"
+                      : "bg-[var(--color-bg-soft)] border-[var(--color-line)] text-[var(--color-text-dim)] hover:bg-[var(--color-line)]"
+                  }`}
+                >
+                  {t === "limit" ? "Limit" : "Market"}
+                </button>
+              ))}
+            </div>
+
+            {/* Price */}
+            {type === "limit" && (
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-[11px] text-[var(--color-text-dim)] font-semibold uppercase tracking-wider">Fiyat (USDT)</label>
+                  {currentPx && (
+                    <button onClick={() => setPx(currentPx.toFixed(2))} className="text-[10px] text-[var(--color-accent)] hover:underline font-semibold">
+                      Piyasa fiyatı
+                    </button>
+                  )}
+                </div>
+                <input
+                  value={px}
+                  onChange={(e) => setPx(e.target.value)}
+                  placeholder={currentPx ? currentPx.toFixed(2) : "0.00"}
+                  className="w-full bg-[var(--color-bg-soft)] border border-[var(--color-line)] px-3 py-2.5 rounded-xl font-num text-sm text-[var(--color-text)]"
+                />
+              </div>
+            )}
+
+            {/* Quantity */}
+            <div className="space-y-1.5">
+              <label className="text-[11px] text-[var(--color-text-dim)] font-semibold uppercase tracking-wider">Miktar</label>
+              <input
+                value={qty}
+                onChange={(e) => setQty(e.target.value)}
+                placeholder="0.001"
+                className="w-full bg-[var(--color-bg-soft)] border border-[var(--color-line)] px-3 py-2.5 rounded-xl font-num text-sm text-[var(--color-text)]"
+              />
+              <div className="flex gap-1.5">
+                {["25%", "50%", "75%", "100%"].map((pct) => (
+                  <button
+                    key={pct}
+                    onClick={() => {
+                      const factor = parseInt(pct) / 100;
+                      setQty((0.1 * factor).toFixed(4));
+                    }}
+                    className="flex-1 text-[10px] py-1.5 rounded-lg bg-[var(--color-bg-soft)] border border-[var(--color-line)] text-[var(--color-text-dim)] hover:bg-[var(--color-line)] hover:text-[var(--color-text)] transition font-semibold"
+                  >
+                    {pct}
                   </button>
                 ))}
               </div>
             </div>
 
-            {/* Price (limit only) */}
-            {type === "limit" && (
-              <div className="space-y-1">
-                <div className="flex items-center justify-between">
-                  <label className="text-xs text-text-dim font-medium">Fiyat (USDT)</label>
-                  {currentPx && (
-                    <button onClick={() => setPx(currentPx.toFixed(2))}
-                      className="text-[10px] text-accent hover:underline">
-                      Piyasa fiyatını kullan
-                    </button>
-                  )}
-                </div>
-                <input value={px} onChange={(e) => setPx(e.target.value)}
-                  placeholder={currentPx ? currentPx.toFixed(2) : "0.00"}
-                  className="w-full bg-bg-soft border border-line px-3 py-2 rounded-xl font-mono text-sm text-text outline-none focus:border-accent" />
-              </div>
-            )}
-
-            {/* Quantity */}
-            <div className="space-y-1">
-              <label className="text-xs text-text-dim font-medium">Miktar</label>
-              <div className="flex gap-2">
-                <input value={qty} onChange={(e) => setQty(e.target.value)}
-                  placeholder="0.001"
-                  className="flex-1 bg-bg-soft border border-line px-3 py-2 rounded-xl font-mono text-sm text-text outline-none focus:border-accent" />
-                <div className="flex gap-1">
-                  {["25%", "50%", "75%", "100%"].map((pct) => (
-                    <button key={pct} onClick={() => {
-                      const base = 0.1;
-                      const factor = parseInt(pct) / 100;
-                      setQty((base * factor).toFixed(4));
-                    }}
-                      className="text-[10px] px-1.5 py-1 rounded-lg bg-bg-soft border border-line text-text-dim hover:bg-line transition">
-                      {pct}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            {/* Risk özeti */}
+            {/* Risk summary */}
             {entryPrice > 0 && Number(qty) > 0 && (
-              <div className="bg-bg-soft rounded-xl p-3 border border-line space-y-1.5">
-                <div className="flex items-center gap-1.5 mb-1">
-                  <BarChart3 size={11} className="text-accent" />
-                  <span className="text-[11px] font-semibold text-text-dim">Risk Analizi</span>
-                </div>
+              <div className="bg-[var(--color-bg-soft)] rounded-xl p-3 border border-[var(--color-line)]">
+                <div className="text-[10px] text-[var(--color-text-muted)] font-semibold uppercase tracking-wider mb-2">Risk Analizi</div>
                 <div className="grid grid-cols-3 gap-2 text-xs">
                   <div>
-                    <div className="text-text-dim">Pozisyon</div>
-                    <div className="font-mono font-semibold text-text">${positionValue.toFixed(0)}</div>
+                    <div className="text-[var(--color-text-muted)]">Pozisyon</div>
+                    <div className="font-num font-bold text-[var(--color-text)]">${positionValue.toFixed(0)}</div>
                   </div>
                   <div>
-                    <div className="text-text-dim">Risk Tutarı</div>
-                    <div className={`font-mono font-semibold ${riskColor}`}>${riskAmount.toFixed(2)}</div>
+                    <div className="text-[var(--color-text-muted)]">Risk $</div>
+                    <div className={`font-num font-bold ${riskColor}`}>${riskAmount.toFixed(2)}</div>
                   </div>
                   <div>
-                    <div className="text-text-dim">Risk %</div>
-                    <div className={`font-mono font-semibold ${riskColor}`}>{riskPct.toFixed(2)}%</div>
+                    <div className="text-[var(--color-text-muted)]">Risk %</div>
+                    <div className={`font-num font-bold ${riskColor}`}>{riskPct.toFixed(2)}%</div>
                   </div>
                 </div>
                 {riskPct > riskConfig.riskPerTradePct && (
-                  <div className="flex items-center gap-1 text-[10px] text-amber-600 mt-1">
-                    <AlertCircle size={10} />
-                    Risk limiti aşılıyor (max %{riskConfig.riskPerTradePct})
+                  <div className="flex items-center gap-1 text-[10px] text-[var(--color-accent)] mt-2 font-semibold">
+                    ⚠ Risk limiti aşılıyor (max %{riskConfig.riskPerTradePct})
                   </div>
                 )}
               </div>
             )}
 
-            {/* Estimated value */}
-            <div className="flex items-center justify-between text-xs text-text-dim px-1">
-              <span>Tahmini değer: <span className="font-mono text-text">${estimatedValue} USDT</span></span>
+            <div className="flex items-center justify-between text-[10px] text-[var(--color-text-muted)] px-0.5">
+              <span>Tahmini: <span className="font-num font-semibold text-[var(--color-text)]">${estimatedValue} USDT</span></span>
               <span>Min: 0.001</span>
             </div>
 
-            {/* ── Gelişmiş Seçenekler ── */}
+            {/* Advanced toggle */}
             <button
               onClick={() => setShowAdvanced((v) => !v)}
-              className="w-full flex items-center justify-between px-3 py-2 rounded-xl bg-bg-soft border border-line text-xs text-text-dim hover:bg-line transition"
+              className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl bg-[var(--color-bg-soft)] border border-[var(--color-line)] text-xs text-[var(--color-text-dim)] hover:bg-[var(--color-line)] transition"
             >
-              <span className="flex items-center gap-1.5">
-                <Shield size={11} />
-                Gelişmiş: SL / TP / Kaldıraç
-              </span>
-              {showAdvanced ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+              <span className="font-semibold">SL / TP / Kaldıraç</span>
+              <span>{showAdvanced ? "▲" : "▼"}</span>
             </button>
 
             {showAdvanced && (
-              <div className="space-y-3 bg-bg-soft rounded-xl p-3 border border-line">
+              <div className="space-y-3 bg-[var(--color-bg-soft)] rounded-xl p-3 border border-[var(--color-line)]">
                 {/* Stop-Loss */}
-                <div className="space-y-1.5">
+                <div className="space-y-2">
                   <div className="flex items-center justify-between">
-                    <label className="flex items-center gap-1.5 text-xs font-medium text-text cursor-pointer">
-                      <input type="checkbox" checked={slEnabled} onChange={(e) => setSlEnabled(e.target.checked)}
-                        className="accent-red-500 w-3.5 h-3.5" />
-                      <span className="text-down">Stop-Loss</span>
+                    <label className="flex items-center gap-2 text-xs font-semibold text-[var(--color-text)] cursor-pointer">
+                      <input type="checkbox" checked={slEnabled} onChange={(e) => setSlEnabled(e.target.checked)} className="accent-[var(--color-down)] w-3.5 h-3.5" />
+                      <span className="text-[var(--color-down)]">Stop-Loss</span>
                     </label>
                     {slEnabled && entryPrice > 0 && (
-                      <span className="text-[10px] font-mono text-down">${slPrice.toFixed(2)}</span>
+                      <span className="text-[10px] font-num font-bold text-[var(--color-down)]">${slPrice.toFixed(2)}</span>
                     )}
                   </div>
                   {slEnabled && (
                     <div className="flex items-center gap-2">
                       <input type="range" min={0.1} max={10} step={0.1} value={slPct}
-                        onChange={(e) => setSlPct(Number(e.target.value))}
-                        className="flex-1 accent-red-500" />
-                      <span className="text-xs font-mono text-down w-10 text-right">{slPct}%</span>
+                        onChange={(e) => setSlPct(Number(e.target.value))} className="flex-1 accent-[var(--color-down)]" />
+                      <span className="text-xs font-num font-bold text-[var(--color-down)] w-10 text-right">{slPct}%</span>
                     </div>
                   )}
                 </div>
 
                 {/* Take-Profit */}
-                <div className="space-y-1.5">
+                <div className="space-y-2">
                   <div className="flex items-center justify-between">
-                    <label className="flex items-center gap-1.5 text-xs font-medium text-text cursor-pointer">
-                      <input type="checkbox" checked={tpEnabled} onChange={(e) => setTpEnabled(e.target.checked)}
-                        className="accent-green-500 w-3.5 h-3.5" />
-                      <span className="text-up">Take-Profit</span>
+                    <label className="flex items-center gap-2 text-xs font-semibold text-[var(--color-text)] cursor-pointer">
+                      <input type="checkbox" checked={tpEnabled} onChange={(e) => setTpEnabled(e.target.checked)} className="accent-[var(--color-up)] w-3.5 h-3.5" />
+                      <span className="text-[var(--color-up)]">Take-Profit</span>
                     </label>
                     {tpEnabled && entryPrice > 0 && (
-                      <span className="text-[10px] font-mono text-up">${tpPrice.toFixed(2)}</span>
+                      <span className="text-[10px] font-num font-bold text-[var(--color-up)]">${tpPrice.toFixed(2)}</span>
                     )}
                   </div>
                   {tpEnabled && (
                     <div className="flex items-center gap-2">
                       <input type="range" min={0.5} max={30} step={0.5} value={tpPct}
-                        onChange={(e) => setTpPct(Number(e.target.value))}
-                        className="flex-1 accent-green-500" />
-                      <span className="text-xs font-mono text-up w-10 text-right">{tpPct}%</span>
+                        onChange={(e) => setTpPct(Number(e.target.value))} className="flex-1 accent-[var(--color-up)]" />
+                      <span className="text-xs font-num font-bold text-[var(--color-up)] w-10 text-right">{tpPct}%</span>
                     </div>
                   )}
                 </div>
 
-                {/* Risk/Ödül oranı */}
                 {slEnabled && tpEnabled && (
-                  <div className="flex items-center justify-between text-xs bg-bg-elev rounded-lg px-2 py-1.5 border border-line">
-                    <span className="text-text-dim flex items-center gap-1"><Target size={10} /> Risk/Ödül</span>
-                    <span className="font-semibold text-accent">1:{(tpPct / slPct).toFixed(2)}</span>
+                  <div className="flex items-center justify-between text-xs bg-[var(--color-bg-elev)] rounded-lg px-3 py-2 border border-[var(--color-line)]">
+                    <span className="text-[var(--color-text-dim)] font-semibold">Risk/Ödül</span>
+                    <span className="font-bold font-num text-[var(--color-accent)]">1:{(tpPct / slPct).toFixed(2)}</span>
                   </div>
                 )}
 
-                {/* Kaldıraç (perp/futures için) */}
-                <div className="space-y-1.5">
+                {/* Leverage */}
+                <div className="space-y-2">
                   <div className="flex items-center justify-between">
-                    <label className="text-xs font-medium text-text flex items-center gap-1.5">
-                      <Zap size={11} className="text-amber-500" />
-                      Kaldıraç
-                      {!isPerpOrFutures && <span className="text-[9px] text-text-dim">(spot için 1x)</span>}
-                    </label>
-                    <span className="text-xs font-mono font-bold text-accent">{leverage}x</span>
+                    <span className="text-xs font-semibold text-[var(--color-text)]">Kaldıraç</span>
+                    <span className="text-xs font-num font-bold text-[var(--color-accent)]">{leverage}x</span>
                   </div>
-                  <input type="range" min={1} max={isPerpOrFutures ? 100 : 1} step={1} value={leverage}
-                    onChange={(e) => setLeverage(Number(e.target.value))}
-                    className="w-full accent-amber-500"
-                    disabled={!isPerpOrFutures} />
-                  <div className="flex justify-between text-[10px] text-text-dim">
-                    <span>1x</span>
-                    <span>{isPerpOrFutures ? "100x" : "1x (spot)"}</span>
+                  <input type="range" min={1} max={20} step={1} value={leverage}
+                    onChange={(e) => setLeverage(Number(e.target.value))} className="w-full accent-[var(--color-accent)]" />
+                  <div className="flex justify-between text-[9px] text-[var(--color-text-muted)]">
+                    <span>1x</span><span>5x</span><span>10x</span><span>20x</span>
                   </div>
-                  {leverage > 10 && (
-                    <div className="flex items-center gap-1 text-[10px] text-down">
-                      <AlertCircle size={9} />
-                      Yüksek kaldıraç — likidasyona dikkat
-                    </div>
-                  )}
-                </div>
-
-                {/* Not */}
-                <div>
-                  <label className="text-xs text-text-dim">Emir Notu (opsiyonel)</label>
-                  <input value={orderNote} onChange={(e) => setOrderNote(e.target.value)}
-                    placeholder="Strateji notu..."
-                    className="w-full mt-1 bg-bg-elev border border-line px-3 py-1.5 rounded-xl text-xs text-text outline-none focus:border-accent" />
                 </div>
               </div>
             )}
 
             {/* Flash message */}
             {flash && (
-              <div className={`text-sm px-3 py-2.5 rounded-xl flex items-center gap-2 ${flash.ok ? "bg-up/10 text-up border border-up/20" : "bg-down/10 text-down border border-down/20"}`}>
-                {flash.ok ? <CheckCircle2 size={14} /> : <AlertCircle size={14} />}
+              <div className={`flex items-center gap-2 rounded-xl px-3 py-2.5 text-xs font-semibold ${
+                flash.ok
+                  ? "bg-[var(--color-up)]/10 text-[var(--color-up)] border border-[var(--color-up)]/20"
+                  : "bg-[var(--color-down)]/10 text-[var(--color-down)] border border-[var(--color-down)]/20"
+              }`}>
+                <span>{flash.ok ? "✓" : "✕"}</span>
                 {flash.msg}
               </div>
             )}
 
             {/* Submit */}
-            <button onClick={submit} disabled={loading}
-              className={`w-full py-3.5 rounded-xl font-bold text-sm transition disabled:opacity-60 ${
+            <button
+              onClick={submit}
+              disabled={loading || !token}
+              className={`w-full py-3.5 rounded-xl font-black text-base transition disabled:opacity-60 disabled:cursor-not-allowed ${
                 side === "buy"
-                  ? "bg-up text-white hover:brightness-110 shadow-sm"
-                  : "bg-down text-white hover:brightness-110 shadow-sm"
-              }`}>
-              {loading
-                ? <span className="flex items-center justify-center gap-2"><Loader2 size={14} className="animate-spin" /> İşleniyor...</span>
-                : `${side === "buy" ? "AL" : "SAT"} — ${qty} ${sym.replace("USDT", "")}${leverage > 1 ? ` (${leverage}x)` : ""}`}
+                  ? "bg-[var(--color-up)] text-white hover:brightness-110 shadow-[0_4px_20px_rgba(14,203,129,0.3)]"
+                  : "bg-[var(--color-down)] text-white hover:brightness-110 shadow-[0_4px_20px_rgba(246,70,93,0.3)]"
+              }`}
+            >
+              {loading ? (
+                <span className="flex items-center justify-center gap-2">
+                  <svg className="animate-spin" width="14" height="14" viewBox="0 0 16 16" fill="none">
+                    <circle cx="8" cy="8" r="6" stroke="currentColor" strokeWidth="2" strokeDasharray="20 10" />
+                  </svg>
+                  İşleniyor...
+                </span>
+              ) : (
+                `${side === "buy" ? "AL" : "SAT"} — ${qty} ${sym.replace("USDT", "")}`
+              )}
             </button>
-
-            <p className="text-[10px] text-text-dim text-center">
-              Paper mod aktif — emirler simüle edilir, gerçek işlem yapılmaz
-            </p>
           </div>
         </div>
 
-        {/* ── Order History ── */}
-        <div className="bg-bg-elev border border-line rounded-2xl shadow-card overflow-hidden flex flex-col">
-          <div className="px-4 py-3 border-b border-line flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Clock size={13} className="text-text-dim" />
-              <span className="text-sm font-bold text-text">Emir Geçmişi</span>
-              <span className="text-xs px-1.5 py-0.5 rounded-full bg-bg-soft text-text-dim border border-line">{orders.length}</span>
-            </div>
-            <button onClick={loadOrders} disabled={loadingOrders}
-              className="p-1.5 rounded-lg hover:bg-bg-soft text-text-dim transition disabled:opacity-50">
-              {loadingOrders ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />}
-            </button>
-          </div>
-
-          {/* Özet istatistikler */}
-          {orders.length > 0 && (
-            <div className="px-4 py-2 border-b border-line bg-bg-soft/50 grid grid-cols-3 gap-2 text-xs">
+        {/* ── Col 2: Orderbook ── */}
+        <div className="min-h-[500px]">
+          {currentPx ? (
+            <Orderbook midPrice={currentPx} onPriceClick={(p) => { if (type === "limit") setPx(p.toFixed(2)); }} />
+          ) : (
+            <div className="card h-full flex items-center justify-center text-[var(--color-text-dim)] text-sm">
               <div className="text-center">
-                <div className="font-semibold text-up">{orders.filter((o) => o.status === "filled").length}</div>
-                <div className="text-text-dim">Dolu</div>
-              </div>
-              <div className="text-center">
-                <div className="font-semibold text-amber-600">{orders.filter((o) => o.status === "open" || o.status === "pending").length}</div>
-                <div className="text-text-dim">Açık</div>
-              </div>
-              <div className="text-center">
-                <div className="font-semibold text-down">{orders.filter((o) => o.status === "cancelled" || o.status === "rejected").length}</div>
-                <div className="text-text-dim">İptal</div>
+                <div className="text-3xl mb-3">📊</div>
+                Fiyat verisi bekleniyor...
               </div>
             </div>
           )}
+        </div>
 
-          <div className="flex-1 overflow-auto divide-y divide-line">
+        {/* ── Col 3: Order History ── */}
+        <div className="card overflow-hidden flex flex-col">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--color-line)] shrink-0">
+            <span className="text-sm font-bold text-[var(--color-text)]">Emir Geçmişi</span>
+            <button
+              onClick={loadOrders}
+              disabled={loadingOrders}
+              className="p-1.5 rounded-lg hover:bg-[var(--color-bg-soft)] text-[var(--color-text-dim)] transition disabled:opacity-50"
+            >
+              <svg width="12" height="12" viewBox="0 0 16 16" fill="none" className={loadingOrders ? "animate-spin" : ""}>
+                <path d="M14 8A6 6 0 1 1 8 2" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+                <polyline points="14,2 14,8 8,8" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </button>
+          </div>
+
+          {/* Column headers */}
+          <div className="grid px-4 py-2 text-[10px] text-[var(--color-text-muted)] font-semibold uppercase tracking-wider border-b border-[var(--color-line)] shrink-0"
+            style={{ gridTemplateColumns: "60px 1fr 80px 70px" }}>
+            <span>Yön</span>
+            <span>Sembol</span>
+            <span className="text-right">Fiyat</span>
+            <span className="text-right">Durum</span>
+          </div>
+
+          <div className="flex-1 overflow-auto divide-y divide-[var(--color-line)]">
             {recentOrders.length === 0 && (
-              <div className="px-4 py-12 text-center text-text-dim text-sm">
-                <Clock size={28} className="mx-auto mb-2 opacity-30" />
-                <div>Henüz emir yok</div>
-                <div className="text-xs mt-1 opacity-60">İlk emrini gir</div>
+              <div className="px-4 py-10 text-center text-xs text-[var(--color-text-dim)]">
+                <div className="text-2xl mb-2">📋</div>
+                Emir yok
               </div>
             )}
-            {recentOrders.map((o) => {
-              const StatusIcon = STATUS_ICONS[o.status] ?? Circle;
-              const isPaper = o.isPaper === true || o.isPaper === "true";
-              return (
-                <div key={o.id} className="px-4 py-3 hover:bg-bg-soft transition">
-                  <div className="flex items-center justify-between mb-1">
-                    <div className="flex items-center gap-2">
-                      <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${o.side === "buy" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>
-                        {o.side.toUpperCase()}
-                      </span>
-                      <span className="font-mono text-sm font-semibold text-text">{o.sym}</span>
-                      {isPaper && <span className="text-[9px] px-1 py-0.5 rounded bg-blue-100 text-blue-700 font-medium">PAPER</span>}
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <StatusIcon size={11} className={o.status === "filled" ? "text-up" : o.status === "rejected" ? "text-down" : "text-text-dim"} />
-                      <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${STATUS_COLORS[o.status] ?? "bg-bg-soft text-text-dim"}`}>
-                        {o.status}
-                      </span>
-                    </div>
-                  </div>
-                  <div className="flex items-center justify-between text-xs text-text-dim">
-                    <span>{o.exchange} · {o.qty} @ <span className="font-mono text-text">${(o.avgFillPx ?? o.px ?? 0).toFixed(2)}</span></span>
-                    <span>{o.createdAt ? new Date(o.createdAt).toLocaleTimeString("tr-TR") : o.ts ? new Date(o.ts).toLocaleTimeString("tr-TR") : ""}</span>
-                  </div>
-                  {o.fee !== undefined && o.fee > 0 && (
-                    <div className="text-[10px] text-text-dim mt-0.5">Komisyon: ${o.fee.toFixed(4)}</div>
-                  )}
+            {recentOrders.map((o) => (
+              <div key={o.id} className="grid px-4 py-2.5 items-center hover:bg-[var(--color-bg-soft)] transition"
+                style={{ gridTemplateColumns: "60px 1fr 80px 70px" }}>
+                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded w-fit ${
+                  o.side === "buy" ? "badge-up" : "badge-down"
+                }`}>
+                  {o.side.toUpperCase()}
+                </span>
+                <div>
+                  <div className="text-xs font-bold font-num text-[var(--color-text)]">{o.sym}</div>
+                  <div className="text-[9px] text-[var(--color-text-muted)]">{o.exchange} · {o.qty}</div>
                 </div>
-              );
-            })}
+                <div className="text-right text-xs font-num font-semibold text-[var(--color-text)]">
+                  ${o.px.toFixed(2)}
+                </div>
+                <div className="text-right">
+                  <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold ${STATUS_COLORS[o.status] ?? "badge-neutral"}`}>
+                    {o.status}
+                  </span>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       </div>

@@ -45,6 +45,12 @@ export function useWsHub() {
               return;
             }
 
+            // Binance WS bağlantı durumu — okxConnected'ı da güncelle (Live göstergesi için)
+            if (msg.type === "binance_status") {
+              if (msg.connected) setOkxConnected(true);
+              return;
+            }
+
             if (msg.type === "pong") return;
 
             if (msg.type === "tick") {
