@@ -6,6 +6,10 @@ const SECRET = new TextEncoder().encode(
 const ALG    = "HS256";
 const EXPIRY = "24h";
 
+if (SECRET.length < 32) {
+  throw new Error("SESSION_SECRET en az 32 karakter olmalı");
+}
+
 export interface TokenPayload extends JWTPayload {
   userId: string;
   email: string;

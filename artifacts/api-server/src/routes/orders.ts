@@ -11,6 +11,14 @@ router.use(requireAuth);
 
 function uid() { return Math.random().toString(36).slice(2, 11); }
 
+function isValidSide(value: string): value is "buy" | "sell" {
+  return value === "buy" || value === "sell";
+}
+
+function isValidType(value: string): value is "market" | "limit" {
+  return value === "market" || value === "limit";
+}
+
 // POST /api/orders — emir gönder
 router.post("/", async (req, res) => {
   const { exchangeId, sym, side, type, qty, price } = req.body as {
@@ -19,8 +27,23 @@ router.post("/", async (req, res) => {
     qty: number; price?: number;
   };
 
-  if (!exchangeId || !sym || !side || !type || !qty) {
+  if (!exchangeId || !sym || !side || !type || qty == null) {
     res.status(400).json({ error: "Eksik parametre: exchangeId, sym, side, type, qty gerekli" });
+    return;
+  }
+
+  if (!isValidSide(side) || !isValidType(type)) {
+    res.status(400).json({ error: "Geçersiz side/type değeri" });
+    return;
+  }
+
+  if (!Number.isFinite(qty) || qty <= 0) {
+    res.status(400).json({ error: "qty pozitif bir sayı olmalı" });
+    return;
+  }
+
+  if (type === "limit" && (!Number.isFinite(price) || (price as number) <= 0)) {
+    res.status(400).json({ error: "limit emirlerde price pozitif olmalı" });
     return;
   }
 
@@ -30,7 +53,8 @@ router.post("/", async (req, res) => {
   const isPaper = rec.mode === "paper" || !rec.hasApiKey;
 
   try {
-    const ccxtSym = sym.includes("/") ? sym : sym.replace("USDT", "/USDT");
+    const cleanSym = sym.trim().toUpperCase();
+    const ccxtSym = cleanSym.includes("/") ? cleanSym : cleanSym.replace("USDT", "/USDT");
     const result  = await placeOrder({ exchangeId, symbol: ccxtSym, side, type, qty, price, isPaper });
 
     const order = {
@@ -38,7 +62,7 @@ router.post("/", async (req, res) => {
       exchangeId,
       exchangeOid: result.id,
       exchange:    rec.exchange,
-      sym:         sym.replace("/", ""),
+      sym:         cleanSym.replace("/", ""),
       side:        side as "buy" | "sell",
       type:        type as "market" | "limit",
       qty,
