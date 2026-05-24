@@ -1,6 +1,7 @@
 import { useStore } from "@/lib/store";
-import { Shield, AlertTriangle, Save, RotateCcw } from "lucide-react";
-import { useState } from "react";
+import { Shield, AlertTriangle, Save, RotateCcw, Activity, RefreshCw } from "lucide-react";
+import { useState, useEffect } from "react";
+import { api } from "@/lib/api";
 
 type SliderRowProps = {
   label: string; hint: string; value: number;
@@ -38,9 +39,19 @@ function SliderRow({ label, hint, value, min, max, step, unit, color = "bg-accen
 }
 
 export default function RiskManager() {
-  const { riskConfig, setRiskConfig } = useStore();
+  const { riskConfig, setRiskConfig, token } = useStore();
   const [draft, setDraft] = useState({ ...riskConfig });
   const [saved, setSaved] = useState(false);
+  const [riskStatus, setRiskStatus] = useState<{
+    openOrders: number; maxOrders: number; dailyLoss: number; maxDailyLossPct: number;
+  } | null>(null);
+
+  useEffect(() => {
+    if (!token) return;
+    api.getRiskStatus().then(setRiskStatus);
+    const interval = setInterval(() => api.getRiskStatus().then(setRiskStatus), 30000);
+    return () => clearInterval(interval);
+  }, [token]);
 
   const set = (key: keyof typeof draft) => (v: number) => setDraft((d) => ({ ...d, [key]: v }));
 
@@ -187,6 +198,42 @@ export default function RiskManager() {
               <div>• Ortalama yanıt: ~8ms</div>
             </div>
           </div>
+
+          {/* Canlı Risk Durumu */}
+          {riskStatus && (
+            <div className="bg-bg-elev border border-line rounded-xl p-4 shadow-card">
+              <div className="flex items-center gap-2 mb-3">
+                <Activity size={13} className="text-accent" />
+                <span className="text-xs font-medium text-text">Canlı Risk Durumu</span>
+                <button onClick={() => api.getRiskStatus().then(setRiskStatus)}
+                  className="ml-auto p-0.5 rounded hover:bg-bg-soft text-text-dim">
+                  <RefreshCw size={10} />
+                </button>
+              </div>
+              <div className="space-y-2 text-xs">
+                <div className="flex justify-between">
+                  <span className="text-text-dim">Açık Emirler</span>
+                  <span className={`font-semibold ${riskStatus.openOrders >= riskStatus.maxOrders ? "text-down" : "text-text"}`}>
+                    {riskStatus.openOrders} / {riskStatus.maxOrders}
+                  </span>
+                </div>
+                <div className="h-1.5 bg-bg-soft rounded-full overflow-hidden">
+                  <div className={`h-full rounded-full transition-all ${riskStatus.openOrders >= riskStatus.maxOrders ? "bg-down" : "bg-accent"}`}
+                    style={{ width: `${(riskStatus.openOrders / riskStatus.maxOrders) * 100}%` }} />
+                </div>
+                <div className="flex justify-between mt-2">
+                  <span className="text-text-dim">Günlük Kayıp</span>
+                  <span className={`font-semibold ${riskStatus.dailyLoss > 0 ? "text-down" : "text-up"}`}>
+                    ${riskStatus.dailyLoss.toFixed(2)}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-text-dim">Max Günlük Kayıp</span>
+                  <span className="font-semibold text-text">%{riskStatus.maxDailyLossPct}</span>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>

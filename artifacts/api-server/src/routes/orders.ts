@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { requireAuth } from "../middlewares/auth.js";
+import { riskCheck, getRiskStatus } from "../middlewares/riskCheck.js";
 import { placeOrder } from "../lib/ccxt-service.js";
 import { vault } from "../lib/vault.js";
 import { db } from "@workspace/db";
@@ -11,8 +12,8 @@ router.use(requireAuth);
 
 function uid() { return Math.random().toString(36).slice(2, 11); }
 
-// POST /api/orders — emir gönder
-router.post("/", async (req, res) => {
+// POST /api/orders — emir gönder (risk kontrolü ile)
+router.post("/", riskCheck, async (req, res) => {
   const { exchangeId, sym, side, type, qty, price } = req.body as {
     exchangeId: string; sym: string;
     side: "buy" | "sell"; type: "market" | "limit";
@@ -75,6 +76,11 @@ router.get("/", async (req, res) => {
   } catch {
     res.json([]);
   }
+});
+
+// GET /api/orders/risk-status — kullanıcının risk durumu
+router.get("/risk-status", (req, res) => {
+  res.json(getRiskStatus(req.user!.userId));
 });
 
 // GET /api/orders/:exchangeId/open — açık emirler (CCXT'den)

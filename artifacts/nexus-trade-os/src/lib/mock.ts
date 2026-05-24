@@ -219,8 +219,11 @@ export function startMockFeed(): () => void {
     });
   }, 2800);
 
-  // PnL drift — 3s
+  // PnL drift — 5s (WS hub'dan gelen verilerle çakışmayı önlemek için daha seyrek)
   const pnlInterval = setInterval(() => {
+    // WS bağlıysa PnL'i WS'den al, değilse simüle et
+    const wsConnected = useStore.getState().okxConnected;
+    if (wsConnected) return; // WS hub PnL'i yönetiyor
     const cur = useStore.getState().pnl ?? { equity: 12450, realized: 240, unrealized: 200 };
     applyEvent({
       t: "pnl",
@@ -228,7 +231,7 @@ export function startMockFeed(): () => void {
       realized:   cur.realized   + (Math.random() > 0.8 ? (Math.random() - 0.35) * 2.5 : 0),
       unrealized: cur.unrealized + (Math.random() - 0.5) * 6,
     });
-  }, 3000);
+  }, 5000);
 
   return () => {
     clearInterval(tickInterval);

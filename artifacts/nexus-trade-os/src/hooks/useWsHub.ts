@@ -64,6 +64,43 @@ export function useWsHub() {
                 low24h:   msg.low24h  as number | undefined,
                 change24h: msg.change as number | undefined,
               });
+              return;
+            }
+
+            // Sunucudan gelen sinyal broadcast
+            if (msg.type === "signal") {
+              useStore.getState().applyEvent({
+                t:        "signal",
+                id:       msg.id as string,
+                strategy: msg.strategy as string,
+                ex:       msg.ex as string,
+                sym:      msg.sym as string,
+                side:     msg.side as string,
+                strength: msg.strength as number,
+                reason:   msg.reason as string | undefined,
+                market:   msg.market as string | undefined,
+                ts:       (msg.ts as number) ?? Date.now(),
+              });
+              return;
+            }
+
+            // Sunucudan gelen PnL güncelleme
+            if (msg.type === "pnl") {
+              const store = useStore.getState();
+              store.applyEvent({
+                t:          "pnl",
+                equity:     msg.equity as number,
+                realized:   msg.realized as number,
+                unrealized: msg.unrealized as number,
+              });
+              // PnL history'ye de ekle
+              store.pushPnlHistory({
+                ts:         (msg.ts as number) ?? Date.now(),
+                equity:     msg.equity as number,
+                realized:   msg.realized as number,
+                unrealized: msg.unrealized as number,
+              });
+              return;
             }
           } catch {
             // malformed mesaj — yoksay
