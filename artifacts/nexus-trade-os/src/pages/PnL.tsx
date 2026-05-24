@@ -1,10 +1,14 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { api } from "@/lib/api";
 import { useStore, ExchangeBalance } from "@/lib/store";
 import {
   TrendingUp, TrendingDown, Download, Trash2,
-  RefreshCw, Loader2, ChevronDown, ChevronUp,
+  RefreshCw, Loader2, ChevronDown, ChevronUp, BarChart3,
 } from "lucide-react";
+import {
+  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
+  ResponsiveContainer, ReferenceLine,
+} from "recharts";
 
 const EX_COLORS: Record<string, string> = {
   okx:     "bg-blue-600",
@@ -17,16 +21,38 @@ const MODE_COLORS: Record<string, string> = {
   paper:   "bg-blue-100 text-blue-700",
 };
 
+type SnapRow = { ts: number; equity: number; realized: number; unrealized: number };
+
+// Custom tooltip for the chart
+function ChartTooltip({ active, payload, label }: { active?: boolean; payload?: Array<{ value: number; name: string; color: string }>; label?: string }) {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="bg-bg-elev border border-line rounded-xl px-3 py-2 shadow-lg text-xs">
+      <div className="text-text-dim mb-1">{label}</div>
+      {payload.map((p) => (
+        <div key={p.name} className="flex items-center gap-2">
+          <span className="w-2 h-2 rounded-full" style={{ backgroundColor: p.color }} />
+          <span className="text-text-dim capitalize">{p.name}:</span>
+          <span className="font-mono font-semibold text-text">${p.value.toFixed(2)}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default function PnL() {
   const token        = useStore((s) => s.token);
   const livePnL      = useStore((s) => s.pnl);
+  const pnlHistory   = useStore((s) => s.pnlHistory);
+  const pushPnlHistory = useStore((s) => s.pushPnlHistory);
   const { exchangeBalances, setExchangeBalances } = useStore();
 
-  const [rows,          setRows]          = useState<Array<{ ts: number; equity: number; realized: number; unrealized: number }>>([]);
+  const [rows,          setRows]          = useState<SnapRow[]>([]);
   const [retentionDays, setRetentionDays] = useState(90);
   const [loading,       setLoading]       = useState(false);
   const [refreshing,    setRefreshing]    = useState<Record<string, boolean>>({});
   const [expanded,      setExpanded]      = useState<Record<string, boolean>>({});
+  const [chartRange,    setChartRange]    = useState<"1h" | "24h" | "7d" | "all">("24h");
 
   const loadAll = async () => {
     if (!token) return;
@@ -39,6 +65,17 @@ export default function PnL() {
   };
 
   useEffect(() => { loadAll(); }, [token]);
+
+  // Push live PnL into history every 30s
+  useEffect(() => {
+    if (!livePnL) return;
+    const interval = setInterval(() => {
+      pushPnlHistory({ ts: Date.now(), equity: livePnL.equity, realized: livePnL.realized, unrealized: livePnL.unrealized });
+    }, 30000);
+    // Push immediately
+    pushPnlHistory({ ts: Date.now(), equity: livePnL.equity, realized: livePnL.realized, unrealized: livePnL.unrealized });
+    return () => clearInterval(interval);
+  }, [livePnL?.equity]);
 
   const totalBalance = exchangeBalances.reduce((a, b) => a + b.totalUsd, 0);
   const liveBalances = exchangeBalances.filter((b) => b.mode === "live");
@@ -80,6 +117,42 @@ export default function PnL() {
   const unrealized = livePnL?.unrealized ?? 0;
   const totalPnl   = realized + unrealized;
 
+  // Build chart data — combine server snapshots + live history
+  const chartData = useMemo(() => {
+    const now = Date.now();
+    const cutoff = chartRange === "1h"  ? now - 3600000
+                 : chartRange === "24h" ? now - 86400000
+                 : chartRange === "7d"  ? now - 7 * 86400000
+                 : 0;
+
+    // Merge server rows + live history, deduplicate by ts bucket (1min)
+    const allPoints: SnapRow[] = [
+      ...rows.filter((r) => r.ts >= cutoff),
+      ...pnlHistory.filter((r) => r.ts >= cutoff),
+    ].sort((a, b) => a.ts - b.ts);
+
+    // Deduplicate by 1-minute buckets
+    const seen = new Set<number>();
+    return allPoints
+      .filter((r) => {
+        const bucket = Math.floor(r.ts / 60000);
+        if (seen.has(bucket)) return false;
+        seen.add(bucket);
+        return true;
+      })
+      .map((r) => ({
+        time: new Date(r.ts).toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" }),
+        equity: Number(r.equity.toFixed(2)),
+        realized: Number(r.realized.toFixed(2)),
+        unrealized: Number(r.unrealized.toFixed(2)),
+      }));
+  }, [rows, pnlHistory, chartRange]);
+
+  const equityStart = chartData[0]?.equity ?? 0;
+  const equityEnd   = chartData[chartData.length - 1]?.equity ?? 0;
+  const equityDelta = equityEnd - equityStart;
+  const equityUp    = equityDelta >= 0;
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -119,6 +192,63 @@ export default function PnL() {
               ? <TrendingUp size={22} className="text-green-600" />
               : <TrendingDown size={22} className="text-red-600" />}
           </div>
+        </div>
+      </div>
+
+      {/* ── Equity Chart ── */}
+      <div className="bg-bg-elev border border-line rounded-2xl shadow-card overflow-hidden">
+        <div className="px-4 py-3 border-b border-line flex items-center justify-between flex-wrap gap-2">
+          <div className="flex items-center gap-2">
+            <BarChart3 size={14} className="text-accent" />
+            <span className="text-sm font-bold text-text">Equity Grafiği</span>
+            {chartData.length > 1 && (
+              <span className={`text-xs font-semibold ${equityUp ? "text-up" : "text-down"}`}>
+                {equityUp ? "+" : ""}{equityDelta.toFixed(2)} ({equityUp ? "+" : ""}{equityStart > 0 ? ((equityDelta / equityStart) * 100).toFixed(2) : "0"}%)
+              </span>
+            )}
+          </div>
+          <div className="flex gap-1">
+            {(["1h", "24h", "7d", "all"] as const).map((r) => (
+              <button key={r} onClick={() => setChartRange(r)}
+                className={`text-xs px-2.5 py-1 rounded-lg font-medium transition ${chartRange === r ? "bg-accent text-white" : "bg-bg-soft text-text-dim hover:bg-line border border-line"}`}>
+                {r === "all" ? "Tümü" : r}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="p-4">
+          {chartData.length < 2 ? (
+            <div className="h-48 flex items-center justify-center text-text-dim text-sm">
+              <div className="text-center">
+                <BarChart3 size={32} className="mx-auto mb-2 opacity-30" />
+                <div>Grafik için veri bekleniyor...</div>
+                <div className="text-xs mt-1 opacity-60">Sistem çalışırken otomatik dolar</div>
+              </div>
+            </div>
+          ) : (
+            <ResponsiveContainer width="100%" height={200}>
+              <AreaChart data={chartData} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="equityGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor={equityUp ? "#16a34a" : "#dc2626"} stopOpacity={0.25} />
+                    <stop offset="95%" stopColor={equityUp ? "#16a34a" : "#dc2626"} stopOpacity={0.02} />
+                  </linearGradient>
+                  <linearGradient id="realizedGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#d97706" stopOpacity={0.2} />
+                    <stop offset="95%" stopColor="#d97706" stopOpacity={0.02} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="#dde2ea" vertical={false} />
+                <XAxis dataKey="time" tick={{ fontSize: 10, fill: "#64748b" }} tickLine={false} axisLine={false} interval="preserveStartEnd" />
+                <YAxis tick={{ fontSize: 10, fill: "#64748b" }} tickLine={false} axisLine={false} tickFormatter={(v) => `$${v.toFixed(0)}`} width={60} />
+                <Tooltip content={<ChartTooltip />} />
+                {equityStart > 0 && <ReferenceLine y={equityStart} stroke="#64748b" strokeDasharray="4 4" strokeWidth={1} />}
+                <Area type="monotone" dataKey="equity" name="equity" stroke={equityUp ? "#16a34a" : "#dc2626"} strokeWidth={2} fill="url(#equityGrad)" dot={false} activeDot={{ r: 4 }} />
+                <Area type="monotone" dataKey="realized" name="gerçekleşen" stroke="#d97706" strokeWidth={1.5} fill="url(#realizedGrad)" dot={false} activeDot={{ r: 3 }} />
+              </AreaChart>
+            </ResponsiveContainer>
+          )}
         </div>
       </div>
 
@@ -183,6 +313,9 @@ export default function PnL() {
                       <span>Varlık</span><span className="text-right">Serbest</span>
                       <span className="text-right">Kilitli</span><span className="text-right">USD Değer</span>
                     </div>
+                    {bal.assets.length === 0 && (
+                      <div className="px-3 py-3 text-xs text-text-dim text-center">API key eklenmemiş — paper mod</div>
+                    )}
                     {bal.assets.map((a) => (
                       <div key={a.asset} className="grid px-3 py-1.5 text-xs border-b border-line/50 last:border-0 items-center"
                            style={{ gridTemplateColumns: "80px 1fr 1fr 1fr" }}>
@@ -193,33 +326,35 @@ export default function PnL() {
                       </div>
                     ))}
                     {/* Allocation bar */}
-                    <div className="px-3 py-2 border-t border-line">
-                      <div className="flex gap-1 h-2">
-                        {bal.assets.map((a) => (
-                          <div
-                            key={a.asset}
-                            title={`${a.asset}: $${a.usdValue.toFixed(2)}`}
-                            className="rounded-full"
-                            style={{
-                              width: `${(a.usdValue / bal.totalUsd) * 100}%`,
-                              backgroundColor: a.asset === "USDT" ? "#94a3b8" :
-                                a.asset === "BTC" ? "#f59e0b" :
-                                a.asset === "ETH" ? "#6366f1" :
-                                a.asset === "SOL" ? "#8b5cf6" : "#10b981",
-                            }}
-                          />
-                        ))}
+                    {bal.assets.length > 0 && bal.totalUsd > 0 && (
+                      <div className="px-3 py-2 border-t border-line">
+                        <div className="flex gap-1 h-2">
+                          {bal.assets.map((a) => (
+                            <div
+                              key={a.asset}
+                              title={`${a.asset}: $${a.usdValue.toFixed(2)}`}
+                              className="rounded-full"
+                              style={{
+                                width: `${(a.usdValue / bal.totalUsd) * 100}%`,
+                                backgroundColor: a.asset === "USDT" ? "#94a3b8" :
+                                  a.asset === "BTC" ? "#f59e0b" :
+                                  a.asset === "ETH" ? "#6366f1" :
+                                  a.asset === "SOL" ? "#8b5cf6" : "#10b981",
+                              }}
+                            />
+                          ))}
+                        </div>
+                        <div className="flex flex-wrap gap-2 mt-1.5">
+                          {bal.assets.map((a) => (
+                            <span key={a.asset} className="text-[9px] text-text-dim flex items-center gap-1">
+                              <span className="w-1.5 h-1.5 rounded-full inline-block"
+                                style={{ backgroundColor: a.asset === "USDT" ? "#94a3b8" : a.asset === "BTC" ? "#f59e0b" : a.asset === "ETH" ? "#6366f1" : a.asset === "SOL" ? "#8b5cf6" : "#10b981" }} />
+                              {a.asset} {((a.usdValue / bal.totalUsd) * 100).toFixed(1)}%
+                            </span>
+                          ))}
+                        </div>
                       </div>
-                      <div className="flex flex-wrap gap-2 mt-1.5">
-                        {bal.assets.map((a) => (
-                          <span key={a.asset} className="text-[9px] text-text-dim flex items-center gap-1">
-                            <span className="w-1.5 h-1.5 rounded-full inline-block"
-                              style={{ backgroundColor: a.asset === "USDT" ? "#94a3b8" : a.asset === "BTC" ? "#f59e0b" : a.asset === "ETH" ? "#6366f1" : a.asset === "SOL" ? "#8b5cf6" : "#10b981" }} />
-                            {a.asset} {((a.usdValue / bal.totalUsd) * 100).toFixed(1)}%
-                          </span>
-                        ))}
-                      </div>
-                    </div>
+                    )}
                   </div>
                 </div>
               )}

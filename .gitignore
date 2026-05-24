@@ -47,3 +47,12 @@ Thumbs.db
 # Replit
 .cache/
 .local/
+
+# VPS secrets
+vps-setup/nginx/ssl/
+vps-setup/.env
+.env
+*.zip
+
+# Build artifacts (keep dist for reference)
+artifacts/*/dist/public/assets/

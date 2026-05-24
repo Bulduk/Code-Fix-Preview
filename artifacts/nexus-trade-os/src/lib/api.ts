@@ -57,55 +57,6 @@ export type Agent = {
 export type User       = { id: string; email: string; role: string; totp_enabled: boolean };
 export type AuditEntry = { id: string; action: string; target: string; actor: string; ts: number };
 
-// ─── In-memory agent/user store (server-side gelene kadar) ───────────────
-
-let agentStore: Agent[] = [
-  {
-    id:"1", name:"SpotAnalyst",    provider:"anthropic", model:"claude-3-5-sonnet-20241022",
-    agent_type:"llm",      role:"Spot piyasa analizi ve sinyal üretimi",
-    active:true,  exchange_ids:["exc-1","exc-3"],
-    market_types:["spot"],
-  },
-  {
-    id:"2", name:"PerpGuard",      provider:"anthropic", model:"claude-3-5-haiku-20241022",
-    agent_type:"llm",      role:"Perpetual futures risk + pozisyon boyutlama",
-    active:true,  exchange_ids:["exc-1","exc-2","exc-3"],
-    market_types:["perp","futures"],
-  },
-  {
-    id:"3", name:"MarginScanner",  provider:"google",    model:"gemini-1.5-pro",
-    agent_type:"llm",      role:"Marjin işlemler + çoklu borsa sentiment",
-    active:false, exchange_ids:["exc-3"],
-    market_types:["margin","spot"],
-  },
-  {
-    id:"4", name:"NautilusAgent",  provider:"nautilus",  model:"nautilus-v1",
-    agent_type:"nautilus", role:"API gerektirmez — paper trading & backtesting",
-    active:true,  exchange_ids:[],
-    market_types:["spot","perp","futures"],
-  },
-  {
-    id:"5", name:"PolyOracle",     provider:"openai",    model:"gpt-4o",
-    agent_type:"llm",      role:"Polymarket tahmin piyasaları analizi",
-    active:false, exchange_ids:[],
-    market_types:["polymarket"],
-  },
-];
-
-function uid() { return Math.random().toString(36).slice(2, 9); }
-
-const ANALYSIS_TEMPLATES = [
-  (sym: string, p: string) => `[${p}] ${sym}: RSI(14)=${(55+Math.random()*20).toFixed(1)}, MACD pozitif crossover. Hacim %${(150+Math.random()*200).toFixed(0)} artış. Risk/Ödül: 1:${(1.8+Math.random()).toFixed(1)}. Öneri: BUY, SL:%1.5, TP:%3.`,
-  (sym: string, p: string) => `[${p}] ${sym}: Fibonacci %61.8 destek tuttu. Direnç kırılımı bekleniyor. Güven: %${(70+Math.random()*20).toFixed(0)}. Hedef: +%${(3+Math.random()*5).toFixed(1)}.`,
-  (sym: string, p: string) => `[${p}] ${sym}: Volatilite spike — ATR normalin ${(1.8+Math.random()).toFixed(1)}x üstünde. Pozisyon boyutu %50 düşürüldü.`,
-  (sym: string, p: string) => `[${p}] ${sym}: Piyasa yapısı kırıldı. SELL sinyali aktif. Hedef destek: $${(Math.random()*1000).toFixed(0)}.`,
-];
-const NAUTILUS_REPLIES = [
-  (sym: string) => `[NautilusAgent] ${sym} backtesting tamamlandı. 90 günlük simülasyon: Win rate %${(55+Math.random()*20).toFixed(1)}, Sharpe: ${(1.2+Math.random()).toFixed(2)}, Max DD: %${(8+Math.random()*5).toFixed(1)}.`,
-  (sym: string) => `[NautilusAgent] ${sym} paper order yerleştirildi. Fill probability %${(85+Math.random()*10).toFixed(0)}, Expected slippage: ${(0.01+Math.random()*0.05).toFixed(3)}%.`,
-  (sym: string) => `[NautilusAgent] AgentIntent doğrulandı. Risk engine: OK. Entry hesaplandı, SL/TP otomatik set edildi.`,
-];
-
 // ─── API ──────────────────────────────────────────────────────────────────
 
 export const api = {
@@ -127,6 +78,17 @@ export const api = {
   async getExchangeBalance(id: string)                            { return req<ExchangeBalance>(`/exchanges/${id}/balance`); },
   async getExchangeBalances()                                     { return req<ExchangeBalance[]>("/pnl/balances"); },
   async refreshExchangeBalance(id: string)                        { return api.getExchangeBalance(id).then((b) => ({ exchangeId: id, totalUsd: b.totalUsd, fetchedAt: Date.now() })); },
+
+  // Risk Status
+  async getRiskStatus() {
+    return req<{
+      openOrders: number; maxOrders: number;
+      dailyLoss: number; maxDailyLossPct: number;
+      limits: Record<string, number>;
+    }>("/orders/risk-status").catch(() => ({
+      openOrders: 0, maxOrders: 5, dailyLoss: 0, maxDailyLossPct: 8, limits: {},
+    }));
+  },
 
   // Orders
   async placeOrder(cmd: { ex: string; sym: string; side: string; type: string; qty: number; px?: number }) {
@@ -150,19 +112,16 @@ export const api = {
   async getPnLSnapshots() { return req<PnLSnapshot[]>("/pnl/snapshots"); },
   async purgePnL(before: number) { return req<{ ok: boolean }>(`/pnl/purge?before=${before}`, { method:"DELETE" }); },
 
-  // Agents (in-memory — VPS entegrasyon gelince burada güncellenir)
-  async getAgents()                                        { return [...agentStore]; },
-  async updateAgent(id: string, data: Partial<Agent>)     { agentStore = agentStore.map((a) => a.id === id ? { ...a, ...data } : a); return agentStore.find((a) => a.id === id)!; },
+  // Agents — backend API (GET/PATCH /api/agents)
+  async getAgents()                                        { return req<Agent[]>("/agents"); },
+  async updateAgent(id: string, data: Partial<Agent>)     { return req<Agent>(`/agents/${id}`, { method: "PATCH", body: JSON.stringify(data) }); },
+  async createAgent(data: Omit<Agent, "id">)              { return req<Agent>("/agents", { method: "POST", body: JSON.stringify(data) }); },
+  async deleteAgent(id: string)                           { return req<{ ok: boolean }>(`/agents/${id}`, { method: "DELETE" }); },
   async invokeAgent(id: string, message: string) {
-    const agent    = agentStore.find((a) => a.id === id);
-    const isNaut   = agent?.agent_type === "nautilus";
-    await new Promise((r) => setTimeout(r, isNaut ? 800 : 1400 + Math.random() * 600));
-    const sym      = message.match(/\b(BTC|ETH|SOL|BNB|XRP|DOGE|ADA|LINK|MATIC|ARB)\b/i)?.[1]?.toUpperCase() ?? "BTC";
-    const provider = agent?.provider === "anthropic" ? "Claude" : agent?.provider === "google" ? "Gemini" : "GPT";
-    const tmpl     = isNaut
-      ? NAUTILUS_REPLIES[Math.floor(Math.random() * NAUTILUS_REPLIES.length)]
-      : ANALYSIS_TEMPLATES[Math.floor(Math.random() * ANALYSIS_TEMPLATES.length)];
-    return { reply: tmpl(sym + "USDT", provider) };
+    return req<{ reply: string; agentId: string; agentName: string; latencyMs: number; ts: number }>(
+      `/agents/${id}/invoke`,
+      { method: "POST", body: JSON.stringify({ message }) }
+    );
   },
 
   // Users / Audit (admin)
@@ -199,8 +158,8 @@ export const api = {
     await new Promise((r) => setTimeout(r, 300));
     return { ok: true, message_id: Math.floor(Math.random() * 99999) };
   },
-  async getSystemSettings()            { return {}; },
-  async updateSystemSettings(_d: unknown) { return {}; },
+  async getSystemSettings()            { return api.getConfig(); },
+  async updateSystemSettings(d: Record<string, unknown>) { return api.patchConfig(d); },
 
   // ── Config / Trade Mode ──────────────────────────────────────────────────
   async getConfig() {

@@ -243,12 +243,31 @@ function rsiBg(rsi?: number) {
 
 type SortKey = "px" | "change" | "vol" | "rsi";
 
+// Funding rate simülasyonu (perp için)
+function getFundingRate(sym: string, ex: string): number | null {
+  if (!sym.includes("-PERP")) return null;
+  // Deterministik ama gerçekçi görünen funding rate
+  const seed = (sym.charCodeAt(0) + ex.charCodeAt(0)) % 100;
+  return (seed - 50) * 0.0002; // -0.01% ile +0.01% arası
+}
+
+// Open Interest simülasyonu
+function getOI(sym: string): string | null {
+  if (!sym.includes("-PERP") && !sym.match(/-\d{6}$/)) return null;
+  const base = sym.includes("BTC") ? 8500 : sym.includes("ETH") ? 3200 : 450;
+  return `${(base + Math.random() * 200).toFixed(0)}M`;
+}
+
 // ── Row component ──────────────────────────────────────────────────────────
-function MarketRow({ r, onClick }: {
+function MarketRow({ r, tab, onClick }: {
   r: { key: string; ex: string; sym: string; base: string; px: number; change: number; vol24h?: number; rsi?: number };
+  tab: Tab;
   onClick: () => void;
 }) {
   const up = r.change >= 0;
+  const fundingRate = getFundingRate(r.sym, r.ex);
+  const oi = getOI(r.sym);
+
   return (
     <tr onClick={onClick} className="hover:bg-bg-soft cursor-pointer transition group">
       <td className="px-3 py-2.5">
@@ -259,6 +278,11 @@ function MarketRow({ r, onClick }: {
           <div>
             <span className="text-sm font-semibold text-text">{r.base}</span>
             <span className="text-text-dim text-xs">/USDT</span>
+            {fundingRate !== null && (
+              <div className={`text-[9px] font-mono ${fundingRate >= 0 ? "text-up" : "text-down"}`}>
+                FR: {fundingRate >= 0 ? "+" : ""}{(fundingRate * 100).toFixed(4)}%
+              </div>
+            )}
           </div>
         </div>
       </td>
@@ -275,7 +299,8 @@ function MarketRow({ r, onClick }: {
         </span>
       </td>
       <td className="px-2 py-2.5 text-right text-xs text-text-dim hidden sm:table-cell">
-        {r.vol24h ? `$${(r.vol24h/1e6).toFixed(0)}M` : "—"}
+        <div>{r.vol24h ? `${(r.vol24h/1e6).toFixed(0)}M` : "—"}</div>
+        {oi && <div className="text-[9px] text-text-dim/70">OI: {oi}</div>}
       </td>
       <td className={`px-3 py-2.5 text-right text-xs font-mono ${rsiBg(r.rsi)}`}>
         {r.rsi?.toFixed(0) ?? "—"}
@@ -493,7 +518,7 @@ export default function Markets() {
                     </td></tr>
                   )}
                   {rows.map((r) => (
-                    <MarketRow key={r.key} r={r}
+                    <MarketRow key={r.key} r={r} tab={tab}
                       onClick={() => setModal({ key: r.key })} />
                   ))}
                 </tbody>
