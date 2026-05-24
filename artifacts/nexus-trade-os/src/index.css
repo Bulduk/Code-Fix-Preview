@@ -16,11 +16,29 @@
   --shadow-card: 0 1px 4px rgba(0,0,0,.07), 0 4px 16px rgba(0,0,0,.05);
 }
 
+/* Dark mode overrides */
+.dark {
+  --color-bg: #0f1117;
+  --color-bg-elev: #1a1d27;
+  --color-bg-soft: #22263a;
+  --color-line: #2d3148;
+  --color-text: #e8eaf0;
+  --color-text-dim: #8892a4;
+  --color-up: #22c55e;
+  --color-down: #ef4444;
+  --color-accent: #f59e0b;
+}
+
 html, body {
   height: 100%;
   background: #f5f7fa;
   color: #1a1d23;
   font-family: "Inter", "system-ui", sans-serif;
+}
+
+html.dark, html.dark body {
+  background: #0f1117;
+  color: #e8eaf0;
 }
 
 * {

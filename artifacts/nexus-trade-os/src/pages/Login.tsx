@@ -5,7 +5,7 @@ import { api } from "@/lib/api";
 
 export default function Login() {
   const [email, setEmail] = useState("admin@nexus.local");
-  const [pw, setPw] = useState("nexus123");
+  const [pw, setPw] = useState("nexus2024");
   const [totp, setTotp] = useState("");
   const [err, setErr] = useState("");
   const [loading, setLoading] = useState(false);
@@ -76,7 +76,7 @@ export default function Login() {
           </button>
         </form>
         <div className="text-center text-xs text-text-dim">
-          Demo: <span className="font-mono text-text">admin@nexus.local</span> / parola yok
+          Demo: <span className="font-mono text-text">admin@nexus.local</span> / <span className="font-mono text-text">nexus2024</span>
         </div>
       </div>
     </div>

@@ -1,9 +1,10 @@
 import { useEffect, useCallback, useState, useRef } from "react";
 import { Link, useLocation } from "wouter";
-import { LayoutDashboard, LineChart, Bot, Settings, Plus, X, Command, Zap } from "lucide-react";
+import { LayoutDashboard, LineChart, Bot, Settings, Plus, X, Command, Zap, Moon, Sun } from "lucide-react";
 import { useStore, TradeMode } from "@/lib/store";
 import { startMockFeed } from "@/lib/mock";
 import { api } from "@/lib/api";
+import { useWsHub } from "@/hooks/useWsHub";
 
 const TRADE_MODE_LABELS: Record<TradeMode, { label: string; color: string; short: string }> = {
   manual:    { label: "Manuel",    short: "M",  color: "bg-slate-100 text-slate-600 border-slate-200" },
@@ -51,9 +52,20 @@ export default function Shell({ children }: { children: React.ReactNode }) {
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [modeSyncing, setModeSyncing] = useState(false);
   const [modeWarning, setModeWarning] = useState<string | null>(null);
+  const [darkMode, setDarkMode]       = useState(() => {
+    try { return localStorage.getItem("nexus_dark") === "1"; } catch { return false; }
+  });
   const warnTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  useEffect(() => {
+    document.documentElement.classList.toggle("dark", darkMode);
+    try { localStorage.setItem("nexus_dark", darkMode ? "1" : "0"); } catch {}
+  }, [darkMode]);
+
   const applyEventStable = useCallback(applyEvent, []);
+
+  // Connect to backend WS hub (real OKX data + sim ticks from server)
+  useWsHub();
 
   useEffect(() => {
     if (!token) return;
@@ -131,6 +143,13 @@ export default function Shell({ children }: { children: React.ReactNode }) {
                 onay
               </Link>
             )}
+            <button
+              onClick={() => setDarkMode((v) => !v)}
+              title={darkMode ? "Açık mod" : "Koyu mod"}
+              className="p-1.5 rounded-lg bg-bg-elev border border-line text-text-dim hover:bg-bg-soft transition"
+            >
+              {darkMode ? <Sun size={14} /> : <Moon size={14} />}
+            </button>
             <button
               onClick={() => setPaletteOpen(true)}
               className="flex items-center gap-1.5 text-text-dim text-xs px-3 py-1.5 rounded-lg bg-bg-elev border border-line hover:bg-bg-soft transition"
