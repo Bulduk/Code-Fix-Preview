@@ -15,7 +15,7 @@ function uid() { return Math.random().toString(36).slice(2, 11); }
 router.get("/snapshots", async (_req, res) => {
   try {
     const rows = await db.select().from(pnlSnapshotsTable).orderBy(desc(pnlSnapshotsTable.snapshotAt)).limit(1440);
-    res.json(rows.map((r) => ({ ts: r.snapshotAt.getTime(), equity: r.equity, realized: r.realized, unrealized: r.unrealized })));
+    res.json(rows.map((r: typeof rows[0]) => ({ ts: r.snapshotAt.getTime(), equity: r.equity, realized: r.realized, unrealized: r.unrealized })));
   } catch {
     // Fallback: 30 günlük mock
     const now = Date.now();
@@ -53,7 +53,7 @@ router.delete("/purge", async (req, res) => {
 
 // GET /api/pnl/balances — tüm borsaların bakiyesi (tek endpoint)
 router.get("/balances", async (_req, res) => {
-  const list    = vault.list();
+  const list    = vault.listSync();
   const results = await Promise.allSettled(
     list.map((ex) =>
       fetchBalance(ex.id).then((b) => ({
@@ -70,7 +70,7 @@ router.get("/balances", async (_req, res) => {
     results.map((r, i) =>
       r.status === "fulfilled"
         ? r.value
-        : { exchangeId: list[i].id, exchange: list[i].exchange, label: list[i].label, mode: list[i].mode, totalUsd: 0, assets: [], error: "fetch failed", fetchedAt: Date.now() }
+        : { exchangeId: list[i]?.id, exchange: list[i]?.exchange, label: list[i]?.label, mode: list[i]?.mode, totalUsd: 0, assets: [], error: "fetch failed", fetchedAt: Date.now() }
     )
   );
 });

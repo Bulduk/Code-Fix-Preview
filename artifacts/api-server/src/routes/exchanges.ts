@@ -2,6 +2,7 @@ import { Router } from "express";
 import { requireAuth, requireAdmin } from "../middlewares/auth.js";
 import { vault } from "../lib/vault.js";
 import { invalidateInstance, testConnection, fetchBalance } from "../lib/ccxt-service.js";
+import { createGateway, removeGateway } from "../lib/binance-futures.js";
 import { db } from "@workspace/db";
 import { auditLogTable } from "@workspace/db";
 
@@ -25,8 +26,9 @@ function pid(p: string | string[]): string {
 router.use(requireAuth);
 
 // GET /api/exchanges — masked list (no secrets)
-router.get("/", (_req, res) => {
-  res.json(vault.list());
+router.get("/", async (_req, res) => {
+  const list = await vault.list();
+  res.json(list);
 });
 
 // POST /api/exchanges — yeni hesap ekle
@@ -43,7 +45,19 @@ router.post("/", requireAdmin, async (req, res) => {
 
   if (!exchange || !label) { res.status(400).json({ error: "exchange ve label gerekli" }); return; }
 
-  const rec = vault.create({ exchange, label, mode, api_key, api_secret, passphrase, is_active });
+  const rec = await vault.create({ exchange, label, mode, api_key, api_secret, passphrase, is_active });
+
+  // Initialize Binance gateway if applicable
+  if (exchange === "binance") {
+    const raw = vault.rawGet(rec.id);
+    createGateway({
+      exchangeId: rec.id,
+      mode,
+      apiKey: raw?._apiKey,
+      apiSecret: raw?._apiSecret,
+    }).connect().catch(() => {});
+  }
+
   await audit("EXCHANGE_ADD", `${exchange}/${label}`, req.user!.email, String(req.ip ?? ""));
   res.status(201).json(rec);
 });
@@ -52,8 +66,22 @@ router.post("/", requireAdmin, async (req, res) => {
 router.patch("/:id", requireAdmin, async (req, res) => {
   const id = pid(req.params["id"] ?? "");
   invalidateInstance(id);
-  const updated = vault.update(id, req.body as Record<string, unknown>);
+  removeGateway(id);
+
+  const updated = await vault.update(id, req.body as Record<string, unknown>);
   if (!updated) { res.status(404).json({ error: "Bulunamadı" }); return; }
+
+  // Re-init gateway
+  const raw = vault.rawGet(id);
+  if (raw?.exchange === "binance") {
+    createGateway({
+      exchangeId: id,
+      mode: raw.mode,
+      apiKey: raw._apiKey,
+      apiSecret: raw._apiSecret,
+    }).connect().catch(() => {});
+  }
+
   await audit("EXCHANGE_EDIT", id, req.user!.email, String(req.ip ?? ""));
   res.json(updated);
 });
@@ -61,9 +89,10 @@ router.patch("/:id", requireAdmin, async (req, res) => {
 // DELETE /api/exchanges/:id
 router.delete("/:id", requireAdmin, async (req, res) => {
   const id = pid(req.params["id"] ?? "");
-  const ok = vault.delete(id);
+  const ok = await vault.delete(id);
   if (!ok) { res.status(404).json({ error: "Bulunamadı" }); return; }
   invalidateInstance(id);
+  removeGateway(id);
   await audit("EXCHANGE_DELETE", id, req.user!.email, String(req.ip ?? ""));
   res.json({ ok: true });
 });
@@ -92,7 +121,7 @@ router.get("/:id/balance", async (req, res) => {
 
 // GET /api/exchanges/balances/all — tüm hesapların bakiyeleri
 router.get("/balances/all", async (_req, res) => {
-  const list    = vault.list();
+  const list = await vault.list();
   const results = await Promise.allSettled(
     list.map((ex) =>
       fetchBalance(ex.id).then((b) => ({

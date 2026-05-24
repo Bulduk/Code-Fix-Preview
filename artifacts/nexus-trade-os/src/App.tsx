@@ -9,6 +9,8 @@ import PnL from "@/pages/PnL";
 import Agents from "@/pages/Agents";
 import Orchestrator from "@/pages/Orchestrator";
 import RiskManager from "@/pages/RiskManager";
+import Positions from "@/pages/Positions";
+import Backtesting from "@/pages/Backtesting";
 import Admin from "@/pages/admin/Admin";
 import Exchanges from "@/pages/admin/Exchanges";
 import Strategies from "@/pages/admin/Strategies";
@@ -37,8 +39,14 @@ function Router() {
       <Route path="/trade">
         {() => <PrivateRoute><Trade /></PrivateRoute>}
       </Route>
+      <Route path="/positions">
+        {() => <PrivateRoute><Positions /></PrivateRoute>}
+      </Route>
       <Route path="/pnl">
         {() => <PrivateRoute><PnL /></PrivateRoute>}
+      </Route>
+      <Route path="/backtest">
+        {() => <PrivateRoute><Backtesting /></PrivateRoute>}
       </Route>
       <Route path="/agents">
         {() => <PrivateRoute><Agents /></PrivateRoute>}

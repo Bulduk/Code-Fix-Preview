@@ -202,6 +202,71 @@ export const api = {
   async getSystemSettings()            { return {}; },
   async updateSystemSettings(_d: unknown) { return {}; },
 
+  // ── Futures ───────────────────────────────────────────────────────────────
+  async getFuturesPositions() { return req<unknown[]>("/futures/positions"); },
+  async getFuturesBalance(exchangeId: string) { return req<unknown>(`/futures/${exchangeId}/balance`); },
+  async closeFuturesPosition(exchangeId: string, symbol: string, percentage = 100) {
+    return req<unknown>(`/futures/${exchangeId}/close-position`, {
+      method: "POST", body: JSON.stringify({ symbol, percentage }),
+    });
+  },
+  async setLeverage(exchangeId: string, symbol: string, leverage: number) {
+    return req<unknown>(`/futures/${exchangeId}/leverage`, {
+      method: "PATCH", body: JSON.stringify({ symbol, leverage }),
+    });
+  },
+  async getFuturesOHLCV(exchangeId: string, symbol: string, timeframe: string, limit = 200) {
+    return req<unknown[]>(`/futures/${exchangeId}/ohlcv?symbol=${symbol}&timeframe=${timeframe}&limit=${limit}`);
+  },
+  async getFundingRate(exchangeId: string, symbol: string) {
+    return req<unknown>(`/futures/${exchangeId}/funding-rate?symbol=${symbol}`);
+  },
+  async getGatewayStatus() { return req<unknown[]>("/futures/status"); },
+
+  // ── Risk ──────────────────────────────────────────────────────────────────
+  async getRiskState() { return req<unknown>("/risk"); },
+  async getRiskConfig() { return req<unknown>("/risk/config"); },
+  async updateRiskConfig(config: Record<string, unknown>) {
+    return req<unknown>("/risk/config", { method: "PATCH", body: JSON.stringify(config) });
+  },
+  async triggerKillSwitch(reason?: string) {
+    return req<unknown>("/risk/kill-switch/trigger", { method: "POST", body: JSON.stringify({ reason }) });
+  },
+  async resetKillSwitch() {
+    return req<unknown>("/risk/kill-switch/reset", { method: "POST" });
+  },
+  async checkRisk(params: Record<string, unknown>) {
+    return req<unknown>("/risk/check", { method: "POST", body: JSON.stringify(params) });
+  },
+
+  // ── AI ────────────────────────────────────────────────────────────────────
+  async getAIAgents() { return req<unknown[]>("/ai/agents"); },
+  async updateAIAgent(id: string, data: Record<string, unknown>) {
+    return req<unknown>(`/ai/agents/${id}`, { method: "PATCH", body: JSON.stringify(data) });
+  },
+  async runAIOrchestration(symbol: string, exchangeId?: string) {
+    return req<unknown>("/ai/run", { method: "POST", body: JSON.stringify({ symbol, exchangeId }) });
+  },
+  async getAIMemory(symbol?: string) {
+    return req<unknown[]>(`/ai/memory${symbol ? `?symbol=${symbol}` : ""}`);
+  },
+
+  // ── Plugins ───────────────────────────────────────────────────────────────
+  async getPlugins() { return req<unknown[]>("/plugins"); },
+  async enablePlugin(id: string) { return req<unknown>(`/plugins/${id}/enable`, { method: "PATCH" }); },
+  async disablePlugin(id: string) { return req<unknown>(`/plugins/${id}/disable`, { method: "PATCH" }); },
+  async updatePluginConfig(id: string, config: Record<string, unknown>) {
+    return req<unknown>(`/plugins/${id}/config`, { method: "PATCH", body: JSON.stringify(config) });
+  },
+
+  // ── Backtesting ───────────────────────────────────────────────────────────
+  async runBacktest(params: Record<string, unknown>) {
+    return req<unknown>("/backtest/run", { method: "POST", body: JSON.stringify(params) });
+  },
+  async runWalkForward(params: Record<string, unknown>) {
+    return req<unknown>("/backtest/walk-forward", { method: "POST", body: JSON.stringify(params) });
+  },
+
   // ── Config / Trade Mode ──────────────────────────────────────────────────
   async getConfig() {
     return req<{

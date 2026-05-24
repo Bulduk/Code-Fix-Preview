@@ -2,6 +2,7 @@ import { useEffect, useCallback, useState, useRef } from "react";
 import { Link, useLocation } from "wouter";
 import { LayoutDashboard, LineChart, Bot, Settings, Plus, X, Command, Zap } from "lucide-react";
 import { useStore, TradeMode } from "@/lib/store";
+import { connectWs } from "@/lib/ws";
 import { startMockFeed } from "@/lib/mock";
 import { api } from "@/lib/api";
 
@@ -21,25 +22,27 @@ const RIGHT_NAV = [
 ];
 const FAB_ITEMS = [
   { label: "Hızlı Emir",      href: "/trade",           icon: "📈" },
+  { label: "Pozisyonlar",     href: "/positions",       icon: "📊" },
+  { label: "Backtesting",     href: "/backtest",        icon: "🔬" },
   { label: "Orkestratör",     href: "/orch",            icon: "⚡" },
   { label: "Risk Yönetici",   href: "/risk",            icon: "🛡️" },
   { label: "PnL Raporu",      href: "/pnl",             icon: "💰" },
   { label: "Pluginler",       href: "/admin/plugins",   icon: "🔌" },
-  { label: "Telegram",        href: "/admin/telegram",  icon: "📱" },
   { label: "Sistem Ayarları", href: "/admin/settings",  icon: "⚙️" },
 ];
 const CMD_SHORTCUTS = [
-  { label: "Dashboard",    q: "home"     },
-  { label: "Piyasalar",   q: "markets"  },
-  { label: "Orkestratör", q: "orch"     },
-  { label: "Risk",        q: "risk"     },
-  { label: "PnL",         q: "pnl"      },
-  { label: "Ajanlar",     q: "agents"   },
-  { label: "Trade",       q: "trade"    },
-  { label: "Telegram",    q: "telegram" },
-  { label: "Borsalar",    q: "exchanges"},
-  { label: "Stratejiler", q: "strategies"},
-  { label: "Ayarlar",     q: "settings" },
+  { label: "Dashboard",    q: "home"       },
+  { label: "Piyasalar",   q: "markets"    },
+  { label: "Pozisyonlar", q: "positions"  },
+  { label: "Backtest",    q: "backtest"   },
+  { label: "Orkestratör", q: "orch"       },
+  { label: "Risk",        q: "risk"       },
+  { label: "PnL",         q: "pnl"        },
+  { label: "Ajanlar",     q: "agents"     },
+  { label: "Trade",       q: "trade"      },
+  { label: "Borsalar",    q: "exchanges"  },
+  { label: "Stratejiler", q: "strategies" },
+  { label: "Pluginler",   q: "plugins"    },
 ];
 
 export default function Shell({ children }: { children: React.ReactNode }) {
@@ -57,8 +60,10 @@ export default function Shell({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (!token) return;
-    const stop = startMockFeed();
-    return stop;
+    // Try real WS first, fall back to mock feed for simulation data
+    const stopWs = connectWs();
+    const stopMock = startMockFeed(); // provides sim data when WS has no real data
+    return () => { stopWs(); stopMock(); };
   }, [token, applyEventStable]);
 
   useEffect(() => {
@@ -279,6 +284,8 @@ function CommandPalette({ onClose }: { onClose: () => void }) {
     const t = (query ?? q).trim().toLowerCase();
     if (t.includes("home") || t === "/")              navigate("/");
     else if (t.includes("market"))                    navigate("/markets");
+    else if (t.includes("position") || t.includes("pozis")) navigate("/positions");
+    else if (t.includes("backtest") || t.includes("test")) navigate("/backtest");
     else if (t.includes("orch"))                      navigate("/orch");
     else if (t.includes("risk"))                      navigate("/risk");
     else if (t.includes("pnl"))                       navigate("/pnl");
