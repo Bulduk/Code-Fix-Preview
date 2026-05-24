@@ -3,7 +3,7 @@ import { useStore } from "@/lib/store";
 import { api, Agent, Exchange, MarketType } from "@/lib/api";
 import { Bot, Send, Loader2, Power, Cpu, Zap, X, Anchor, BrainCircuit, Plus, Trash2, RefreshCw } from "lucide-react";
 
-type ChatMsg = { role: "user" | "assistant"; text: string };
+type ChatMsg = { role: "user" | "assistant"; text: string; latencyMs?: number };
 
 const PROVIDER_MODELS: Record<string, { label: string; models: string[]; color: string }> = {
   anthropic: {
@@ -77,7 +77,7 @@ export default function Agents() {
     setThinking(true);
     try {
       const r = await api.invokeAgent(sel.id, q);
-      setChat((c) => [...c, { role: "assistant", text: r.reply }]);
+      setChat((c) => [...c, { role: "assistant", text: r.reply, latencyMs: r.latencyMs }]);
     } finally { setThinking(false); }
   };
 
@@ -286,12 +286,26 @@ export default function Agents() {
                           : <Bot size={12} className="text-accent" />}
                       </div>
                     )}
-                    <div className={`max-w-[82%] px-3 py-2 rounded-2xl text-sm leading-relaxed ${
-                      m.role === "user"
-                        ? "bg-accent/10 text-text border border-accent/20"
-                        : "bg-bg-soft text-text border border-line"
-                    }`}>
-                      {m.text}
+                    <div className="max-w-[82%] space-y-1">
+                      <div className={`px-3 py-2 rounded-2xl text-sm leading-relaxed ${
+                        m.role === "user"
+                          ? "bg-accent/10 text-text border border-accent/20"
+                          : "bg-bg-soft text-text border border-line"
+                      }`}>
+                        {m.text}
+                      </div>
+                      {/* Latency renk kodlaması */}
+                      {m.role === "assistant" && m.latencyMs !== undefined && (
+                        <div className={`text-[10px] px-1 flex items-center gap-1 ${
+                          m.latencyMs < 500 ? "text-up" : m.latencyMs < 2000 ? "text-amber-600" : "text-down"
+                        }`}>
+                          <span className={`w-1.5 h-1.5 rounded-full ${
+                            m.latencyMs < 500 ? "bg-up" : m.latencyMs < 2000 ? "bg-amber-500" : "bg-down"
+                          }`} />
+                          {m.latencyMs}ms
+                          {m.latencyMs < 500 ? " · Hızlı" : m.latencyMs < 2000 ? " · Normal" : " · Yavaş"}
+                        </div>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -400,9 +414,9 @@ export default function Agents() {
             <div>
               <label className="text-xs text-text-dim block mb-1.5">Piyasa Tipleri</label>
               <div className="flex flex-wrap gap-1.5">
-                {(["spot","perp","futures","margin","polymarket"] as MarketType[]).map((mt) => {
+                {(["spot","perp","futures","margin"] as MarketType[]).map((mt) => {
                   const selected = (editDraft.market_types ?? []).includes(mt);
-                  const emoji = { spot:"🔵", perp:"⚡", futures:"📅", margin:"⚖️", polymarket:"🎯" }[mt];
+                  const emoji = { spot:"🔵", perp:"⚡", futures:"📅", margin:"⚖️" }[mt as "spot"|"perp"|"futures"|"margin"];
                   return (
                     <button key={mt}
                       onClick={() => {

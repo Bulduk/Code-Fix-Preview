@@ -9,8 +9,19 @@ import { logger } from "./logger.js";
 import { db } from "@workspace/db";
 import { pnlSnapshotsTable } from "@workspace/db";
 
-const OKX_WS_URL = "wss://ws.okx.com:8443/ws/v5/public";
-const OKX_PAIRS  = ["BTC-USDT","ETH-USDT","SOL-USDT","BNB-USDT","XRP-USDT","DOGE-USDT","MATIC-USDT","ARB-USDT","LINK-USDT","ADA-USDT","AVAX-USDT","DOT-USDT","OP-USDT","TRX-USDT"];
+const OKX_WS_URL     = "wss://ws.okx.com:8443/ws/v5/public";
+const BINANCE_WS_URL = "wss://stream.binance.com:9443/stream";
+
+const OKX_PAIRS = ["BTC-USDT","ETH-USDT","SOL-USDT","BNB-USDT","XRP-USDT","DOGE-USDT","MATIC-USDT","ARB-USDT","LINK-USDT","ADA-USDT","AVAX-USDT","DOT-USDT","OP-USDT","TRX-USDT"];
+
+// Binance combined stream — public, API key gerekmez
+const BINANCE_STREAMS = [
+  "btcusdt@miniTicker","ethusdt@miniTicker","bnbusdt@miniTicker",
+  "solusdt@miniTicker","xrpusdt@miniTicker","adausdt@miniTicker",
+  "dogeusdt@miniTicker","linkusdt@miniTicker","arbusdt@miniTicker",
+  "maticusdt@miniTicker","aaveusdt@miniTicker","uniusdt@miniTicker",
+  "opusdt@miniTicker",
+];
 
 let wss: WebSocketServer | null = null;
 const clients = new Set<WebSocket>();
@@ -63,6 +74,59 @@ function scheduleReconnect() {
   setTimeout(connectOKX, 5000);
 }
 
+// ── Binance Public WebSocket (miniTicker) ──────────────────────────────────
+let binanceWs: WebSocket | null = null;
+
+function connectBinance() {
+  if (binanceWs && (binanceWs.readyState === WebSocket.OPEN || binanceWs.readyState === WebSocket.CONNECTING)) return;
+
+  const url = `${BINANCE_WS_URL}?streams=${BINANCE_STREAMS.join("/")}`;
+  try { binanceWs = new WebSocket(url); } catch { scheduleBinanceReconnect(); return; }
+
+  binanceWs.on("open", () => {
+    logger.info("Binance WS bağlandı");
+    broadcast({ type: "binance_status", connected: true });
+  });
+
+  binanceWs.on("message", (raw) => {
+    try {
+      const msg = JSON.parse(raw.toString()) as { stream?: string; data?: Record<string, string> };
+      if (msg.data && msg.stream?.includes("miniTicker")) {
+        const d      = msg.data;
+        const sym    = (d["s"] as string) ?? "";
+        const px     = parseFloat(d["c"] as string);  // close price
+        const open   = parseFloat(d["o"] as string);  // open price
+        const high   = parseFloat(d["h"] as string);
+        const low    = parseFloat(d["l"] as string);
+        const vol    = parseFloat(d["q"] as string);  // quote volume
+        const change = open > 0 ? (px - open) / open : 0;
+        broadcast({
+          type: "tick",
+          ex:   "binance",
+          sym,
+          px,
+          vol24h:  vol,
+          high24h: high,
+          low24h:  low,
+          change,
+          ts: parseInt(d["E"] as string) || Date.now(),
+        });
+      }
+    } catch { /* ignore malformed */ }
+  });
+
+  binanceWs.on("close", () => {
+    logger.warn("Binance WS kapandı, yeniden bağlanılıyor…");
+    broadcast({ type: "binance_status", connected: false });
+    scheduleBinanceReconnect();
+  });
+  binanceWs.on("error", (e) => logger.error({ err: e }, "Binance WS hata"));
+}
+
+function scheduleBinanceReconnect() {
+  setTimeout(connectBinance, 6000);
+}
+
 function broadcast(payload: Record<string, unknown>) {
   const msg = JSON.stringify(payload);
   for (const client of clients) {
@@ -95,16 +159,17 @@ export function initWsHub(server: Server) {
   });
 
   connectOKX();
+  connectBinance();
 
-  // Simüle tick'ler (Binance/Bybit için — gerçek WS sonraya)
+  // Simüle tick'ler (Bybit için — Binance artık gerçek WS'den geliyor)
+  // Sadece Bybit simüle ediliyor — Binance artık gerçek WS'den, OKX de gerçek WS'den geliyor
   const SIM_PAIRS = [
-    { ex:"binance", sym:"BTCUSDT",  base:67420 }, { ex:"binance", sym:"ETHUSDT",  base:3520  },
-    { ex:"binance", sym:"SOLUSDT",  base:178   }, { ex:"binance", sym:"BNBUSDT",  base:605   },
-    { ex:"bybit",   sym:"BTCUSDT",  base:67415 }, { ex:"bybit",   sym:"ETHUSDT",  base:3518  },
-    { ex:"binance", sym:"XRPUSDT",  base:0.625 }, { ex:"binance", sym:"MATICUSDT",base:0.72  },
-    { ex:"binance", sym:"ARBUSDT",  base:0.92  }, { ex:"binance", sym:"LINKUSDT", base:14.2  },
-    { ex:"binance", sym:"DOGEUSDT", base:0.165 }, { ex:"okx",     sym:"SOLUSDT",  base:177.9 },
-    { ex:"bybit",   sym:"SOLUSDT",  base:177.8 }, { ex:"okx",     sym:"ARBUSDT",  base:0.919 },
+    { ex:"bybit", sym:"BTCUSDT",  base:67415 },
+    { ex:"bybit", sym:"ETHUSDT",  base:3518  },
+    { ex:"bybit", sym:"SOLUSDT",  base:177.8 },
+    { ex:"bybit", sym:"XRPUSDT",  base:0.623 },
+    { ex:"bybit", sym:"BNBUSDT",  base:604   },
+    { ex:"bybit", sym:"DOGEUSDT", base:0.165 },
   ];
   const prices: Record<string, number> = {};
   for (const p of SIM_PAIRS) prices[`${p.ex}:${p.sym}`] = p.base;

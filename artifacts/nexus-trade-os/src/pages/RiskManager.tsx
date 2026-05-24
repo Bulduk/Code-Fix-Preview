@@ -63,15 +63,18 @@ export default function RiskManager() {
 
   const reset = () => setDraft({ ...riskConfig });
 
+  // Risk skoru: Düşük risk = yüksek skor (güvenli = iyi)
+  // Küçük pozisyon, sıkı SL, düşük günlük kayıp = yüksek güvenlik skoru
   const riskScore = Math.min(100, Math.round(
-    (draft.maxPositionPct / 20) * 25 +
-    (1 - draft.stopLossPct / 10) * 25 +
-    (draft.maxDailyLossPct / 20) * 25 +
-    (draft.maxOpenPositions / 10) * 25
+    (1 - draft.maxPositionPct / 20) * 30 +   // küçük pozisyon = güvenli
+    (draft.stopLossPct / 10) * 25 +           // sıkı SL = güvenli
+    (1 - draft.maxDailyLossPct / 25) * 25 +  // düşük günlük kayıp = güvenli
+    (1 - draft.maxOpenPositions / 20) * 20    // az açık pozisyon = güvenli
   ));
 
-  const riskLabel = riskScore < 35 ? { text: "Düşük Risk", color: "text-up" }
-    : riskScore < 65 ? { text: "Orta Risk", color: "text-amber-600" }
+  // Yüksek skor = güvenli (düşük risk)
+  const riskLabel = riskScore >= 65 ? { text: "Güvenli", color: "text-up" }
+    : riskScore >= 35 ? { text: "Orta Risk", color: "text-amber-600" }
     : { text: "Yüksek Risk", color: "text-down" };
 
   return (
@@ -79,7 +82,7 @@ export default function RiskManager() {
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div>
           <h1 className="text-lg font-semibold text-text">Risk Yöneticisi</h1>
-          <p className="text-xs text-text-dim">Rust katmanında doğrulanır — tüm stratejilere uygulanır</p>
+          <p className="text-xs text-text-dim">Binance API ile doğrulanır — tüm stratejilere uygulanır</p>
         </div>
         <div className="flex items-center gap-2">
           <button onClick={reset} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-line bg-bg-elev text-sm text-text-dim hover:text-text transition">
@@ -150,7 +153,7 @@ export default function RiskManager() {
                   <circle cx="50" cy="50" r="40" fill="none" stroke="#eef1f6" strokeWidth="12" />
                   <circle
                     cx="50" cy="50" r="40" fill="none"
-                    stroke={riskScore < 35 ? "#16a34a" : riskScore < 65 ? "#d97706" : "#dc2626"}
+                    stroke={riskScore >= 65 ? "#16a34a" : riskScore >= 35 ? "#d97706" : "#dc2626"}
                     strokeWidth="12"
                     strokeDasharray={`${riskScore * 2.51} 251`}
                     strokeLinecap="round"
@@ -182,20 +185,20 @@ export default function RiskManager() {
           <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 flex gap-2">
             <AlertTriangle size={14} className="text-amber-600 shrink-0 mt-0.5" />
             <p className="text-xs text-amber-700 leading-relaxed">
-              Limitler Rust katmanında gerçek zamanlı doğrulanır. Ayarlar her yeni işlemde uygulanır.
+              Limitler Binance API ile gerçek zamanlı doğrulanır. Ayarlar her yeni işlemde uygulanır.
             </p>
           </div>
 
           <div className="bg-bg-elev border border-line rounded-xl p-4 shadow-card">
             <div className="flex items-center gap-2 mb-2">
               <Shield size={13} className="text-accent" />
-              <span className="text-xs font-medium text-text">Rust Risk Engine</span>
+              <span className="text-xs font-medium text-text">Risk Motoru</span>
               <span className="ml-auto text-[10px] px-1.5 py-0.5 rounded-full bg-green-100 text-green-700">Aktif</span>
             </div>
             <div className="text-xs text-text-dim space-y-1">
-              <div>• Polars DataFrame risk hesabı</div>
-              <div>• PyO3 Python köprüsü</div>
-              <div>• Ortalama yanıt: ~8ms</div>
+              <div>• Binance API pozisyon kontrolü</div>
+              <div>• Günlük kayıp takibi</div>
+              <div>• Ortalama yanıt: ~12ms</div>
             </div>
           </div>
 

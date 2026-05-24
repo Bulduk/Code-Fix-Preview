@@ -97,11 +97,11 @@ const DEFAULT_RISK: RiskConfig = {
 };
 
 const DEFAULT_NODES: LangGraphNode[] = [
-  { id: "market_data", label: "Market Data", status: "idle" },
-  { id: "llm_analysis", label: "LLM Analysis", status: "idle" },
-  { id: "rust_risk", label: "Risk Check (Rust)", status: "idle" },
-  { id: "telegram_approval", label: "Telegram Onay", status: "idle" },
-  { id: "ccxt_execute", label: "CCXT Execute", status: "idle" },
+  { id: "market_data",       label: "Piyasa Verisi",         status: "idle" },
+  { id: "llm_analysis",      label: "AI Analiz (Claude)",    status: "idle" },
+  { id: "rust_risk",         label: "Risk Kontrolü",         status: "idle" },
+  { id: "telegram_approval", label: "Onay Bekliyor",         status: "idle" },
+  { id: "ccxt_execute",      label: "Emir Gönder (Binance)", status: "idle" },
 ];
 
 type Store = {

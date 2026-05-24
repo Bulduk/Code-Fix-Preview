@@ -52,11 +52,11 @@ export default function Orchestrator() {
     addLog("🚀 LangGraph akışı başlatılıyor...");
 
     const NODE_META: { id: string; label: string }[] = [
-      { id: "market_data", label: "Market Data" },
-      { id: "llm_analysis", label: "LLM Analysis" },
-      { id: "rust_risk", label: "Risk Check (Rust)" },
-      { id: "telegram_approval", label: "Telegram Onay" },
-      { id: "ccxt_execute", label: "CCXT Execute" },
+      { id: "market_data",       label: "Piyasa Verisi"          },
+      { id: "llm_analysis",      label: "AI Analiz (Claude)"     },
+      { id: "rust_risk",         label: "Risk Kontrolü"          },
+      { id: "telegram_approval", label: "Onay Bekliyor"          },
+      { id: "ccxt_execute",      label: "Emir Gönder (Binance)"  },
     ];
     const reset: LangGraphNode[] = NODE_META.map(({ id, label }) => ({ id, label, status: "idle" }));
     nodesRef.current = reset;
@@ -145,8 +145,8 @@ export default function Orchestrator() {
     <div className="space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div>
-          <h1 className="text-lg font-semibold text-text">Orkestratör</h1>
-          <p className="text-xs text-text-dim">LangGraph + Claude/Gemini + Rust Risk + CCXT Pro</p>
+          <h1 className="text-lg font-semibold text-text">AI Sinyal Motoru</h1>
+          <p className="text-xs text-text-dim">LangGraph + Claude/Gemini + Risk Kontrolü + Binance CCXT</p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           {orchLatencyMs > 0 && (
