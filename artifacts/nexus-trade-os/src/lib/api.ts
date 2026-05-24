@@ -186,4 +186,20 @@ export const api = {
       method: "PATCH", body: JSON.stringify(data),
     }).catch(() => data);
   },
+
+  // System / VPS
+  async getSystemStatus() {
+    return fetch("/api/system/status").then((r) => r.json());
+  },
+  async getSystemMetrics() {
+    return req<Record<string, unknown>>("/system/metrics");
+  },
+
+  // Auth — şifre değiştir
+  async changePassword(currentPassword: string, newPassword: string) {
+    return req<{ ok: boolean; message: string }>("/auth/change-password", {
+      method: "POST",
+      body: JSON.stringify({ currentPassword, newPassword }),
+    });
+  },
 };

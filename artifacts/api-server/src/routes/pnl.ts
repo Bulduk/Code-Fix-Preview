@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { requireAuth } from "../middlewares/auth.js";
 import { db } from "@workspace/db";
-import { pnlSnapshotsTable } from "@workspace/db";
+import { pnlSnapshotsTable, auditLogTable } from "@workspace/db";
 import { desc, lt } from "drizzle-orm";
 import { fetchBalance } from "../lib/ccxt-service.js";
 import { vault } from "../lib/vault.js";
@@ -48,6 +48,24 @@ router.delete("/purge", async (req, res) => {
     res.json({ ok: true });
   } catch (err) {
     res.status(400).json({ error: String(err) });
+  }
+});
+
+// GET /api/pnl/audit — son audit log kayıtları
+router.get("/audit", async (_req, res) => {
+  try {
+    const rows = await db.select().from(auditLogTable).orderBy(desc(auditLogTable.createdAt)).limit(200);
+    res.json(rows.map((r) => ({
+      id: r.id,
+      action: r.action,
+      target: r.target,
+      actor: r.actor,
+      meta: r.meta,
+      ip: r.ipAddress,
+      ts: r.createdAt.getTime(),
+    })));
+  } catch {
+    res.json([]);
   }
 });
 

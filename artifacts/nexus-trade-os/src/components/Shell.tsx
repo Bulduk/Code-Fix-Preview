@@ -25,12 +25,13 @@ const NAV_ITEMS = [
 ];
 
 const FAB_ITEMS = [
-  { label: "Risk Yönetici",   href: "/risk",           icon: "🛡️" },
-  { label: "Orkestratör",     href: "/orch",           icon: "⚡" },
-  { label: "Pluginler",       href: "/admin/plugins",  icon: "🔌" },
-  { label: "Telegram",        href: "/admin/telegram", icon: "📱" },
-  { label: "Sistem Ayarları", href: "/admin/settings", icon: "⚙️" },
-  { label: "Admin",           href: "/admin",          icon: "🔧" },
+  { label: "Risk Yönetici",   href: "/risk",                    icon: "🛡️" },
+  { label: "Orkestratör",     href: "/orch",                    icon: "⚡" },
+  { label: "Pluginler",       href: "/admin/plugins",           icon: "🔌" },
+  { label: "Telegram",        href: "/admin/telegram",          icon: "📱" },
+  { label: "Sistem Ayarları", href: "/admin/settings",          icon: "⚙️" },
+  { label: "VPS Durumu",      href: "/admin/system-status",     icon: "🖥️" },
+  { label: "Admin",           href: "/admin",                   icon: "🔧" },
 ];
 
 export default function Shell({ children }: { children: React.ReactNode }) {

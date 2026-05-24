@@ -7,6 +7,7 @@ import pnlRouter        from "./pnl.js";
 import strategiesRouter from "./strategies.js";
 import configRouter     from "./config.js";
 import agentsRouter     from "./agents.js";
+import systemRouter     from "./system.js";
 
 const router: IRouter = Router();
 
@@ -18,5 +19,6 @@ router.use("/pnl",        pnlRouter);
 router.use("/strategies", strategiesRouter);
 router.use("/config",     configRouter);
 router.use("/agents",     agentsRouter);
+router.use("/system",     systemRouter);
 
 export default router;

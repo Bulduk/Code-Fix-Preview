@@ -1,0 +1,73 @@
+{
+  "$schema": "https://coolify.io/schema/v1",
+  "version": "1.0",
+  "name": "Nexus Trade OS",
+  "description": "Crypto trading platform — API + Frontend + PostgreSQL + Redis",
+  "services": {
+    "postgres": {
+      "image": "postgres:16-alpine",
+      "environment": {
+        "POSTGRES_USER": "nexus",
+        "POSTGRES_PASSWORD": "${POSTGRES_PASSWORD}",
+        "POSTGRES_DB": "nexusdb"
+      },
+      "volumes": ["pgdata:/var/lib/postgresql/data"],
+      "healthcheck": {
+        "test": "pg_isready -U nexus -d nexusdb",
+        "interval": "10s",
+        "timeout": "5s",
+        "retries": 5
+      }
+    },
+    "redis": {
+      "image": "redis:7-alpine",
+      "command": "redis-server --requirepass ${REDIS_PASSWORD} --maxmemory 256mb --maxmemory-policy allkeys-lru",
+      "healthcheck": {
+        "test": "redis-cli -a ${REDIS_PASSWORD} ping",
+        "interval": "10s",
+        "timeout": "5s",
+        "retries": 5
+      }
+    },
+    "api": {
+      "build": {
+        "context": ".",
+        "dockerfile": "artifacts/api-server/Dockerfile"
+      },
+      "environment": {
+        "NODE_ENV": "production",
+        "PORT": "8080",
+        "DATABASE_URL": "postgresql://nexus:${POSTGRES_PASSWORD}@postgres:5432/nexusdb",
+        "SESSION_SECRET": "${SESSION_SECRET}",
+        "TRADE_MODE": "${TRADE_MODE:-paper}",
+        "OKX_API_KEY": "${OKX_API_KEY:-}",
+        "OKX_SECRET": "${OKX_SECRET:-}",
+        "OKX_PASSPHRASE": "${OKX_PASSPHRASE:-}",
+        "BINANCE_API_KEY": "${BINANCE_API_KEY:-}",
+        "BINANCE_SECRET": "${BINANCE_SECRET:-}",
+        "BYBIT_API_KEY": "${BYBIT_API_KEY:-}",
+        "BYBIT_SECRET": "${BYBIT_SECRET:-}"
+      },
+      "healthcheck": {
+        "test": "wget -qO- http://localhost:8080/api/healthz || exit 1",
+        "interval": "15s",
+        "timeout": "5s",
+        "retries": 5
+      },
+      "depends_on": ["postgres", "redis"]
+    },
+    "frontend": {
+      "build": {
+        "context": ".",
+        "dockerfile": "artifacts/nexus-trade-os/Dockerfile"
+      },
+      "healthcheck": {
+        "test": "wget -qO- http://localhost:3000/healthz || exit 1",
+        "interval": "15s",
+        "timeout": "5s",
+        "retries": 3
+      },
+      "depends_on": ["api"]
+    }
+  }
+}

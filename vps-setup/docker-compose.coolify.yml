@@ -1,0 +1,126 @@
+version: "3.9"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Nexus Trade OS — Coolify Managed Docker Compose
+# Coolify panelinde: New Resource → Docker Compose → bu dosyayı seç
+# Environment variables Coolify UI'dan girilir
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+
+  # ── PostgreSQL 16 ──────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: nexus_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER:     nexus
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB:       nexusdb
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - nexus_net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nexus -d nexusdb"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    labels:
+      - "coolify.managed=true"
+
+  # ── Redis 7 ────────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: nexus_redis
+    restart: unless-stopped
+    command: redis-server --requirepass ${REDIS_PASSWORD} --maxmemory 256mb --maxmemory-policy allkeys-lru
+    networks:
+      - nexus_net
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    labels:
+      - "coolify.managed=true"
+
+  # ── API Server (Node.js / Express + WS Hub) ────────────────────────────────
+  api:
+    build:
+      context: ..
+      dockerfile: artifacts/api-server/Dockerfile
+    container_name: nexus_api
+    restart: unless-stopped
+    environment:
+      NODE_ENV:          production
+      PORT:              8080
+      DATABASE_URL:      postgresql://nexus:${POSTGRES_PASSWORD}@postgres:5432/nexusdb
+      SESSION_SECRET:    ${SESSION_SECRET}
+      TRADE_MODE:        ${TRADE_MODE:-paper}
+      OKX_API_KEY:       ${OKX_API_KEY:-}
+      OKX_SECRET:        ${OKX_SECRET:-}
+      OKX_PASSPHRASE:    ${OKX_PASSPHRASE:-}
+      BINANCE_API_KEY:   ${BINANCE_API_KEY:-}
+      BINANCE_SECRET:    ${BINANCE_SECRET:-}
+      BYBIT_API_KEY:     ${BYBIT_API_KEY:-}
+      BYBIT_SECRET:      ${BYBIT_SECRET:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      GEMINI_API_KEY:    ${GEMINI_API_KEY:-}
+      OPENAI_API_KEY:    ${OPENAI_API_KEY:-}
+    networks:
+      - nexus_net
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/api/healthz || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    labels:
+      - "coolify.managed=true"
+      # Coolify reverse proxy — /api/* ve /ws trafiği bu servise
+      - "traefik.enable=true"
+      - "traefik.http.routers.nexus-api.rule=PathPrefix(`/api`) || PathPrefix(`/ws`)"
+      - "traefik.http.routers.nexus-api.entrypoints=https"
+      - "traefik.http.routers.nexus-api.tls=true"
+      - "traefik.http.services.nexus-api.loadbalancer.server.port=8080"
+
+  # ── Frontend (React SPA — nginx static) ────────────────────────────────────
+  frontend:
+    build:
+      context: ..
+      dockerfile: artifacts/nexus-trade-os/Dockerfile
+    container_name: nexus_frontend
+    restart: unless-stopped
+    networks:
+      - nexus_net
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/healthz || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+    labels:
+      - "coolify.managed=true"
+      # Coolify reverse proxy — tüm diğer trafik frontend'e
+      - "traefik.enable=true"
+      - "traefik.http.routers.nexus-frontend.rule=PathPrefix(`/`)"
+      - "traefik.http.routers.nexus-frontend.entrypoints=https"
+      - "traefik.http.routers.nexus-frontend.tls=true"
+      - "traefik.http.services.nexus-frontend.loadbalancer.server.port=3000"
+      # API route'u frontend'den önce gelsin
+      - "traefik.http.routers.nexus-frontend.priority=1"
+      - "traefik.http.routers.nexus-api.priority=10"
+
+networks:
+  nexus_net:
+    driver: bridge
+
+volumes:
+  pgdata:

@@ -11,6 +11,7 @@ import { pnlSnapshotsTable } from "@workspace/db";
 
 const OKX_WS_URL     = "wss://ws.okx.com:8443/ws/v5/public";
 const BINANCE_WS_URL = "wss://stream.binance.com:9443/stream";
+const BYBIT_WS_URL   = "wss://stream.bybit.com/v5/public/spot";
 
 const OKX_PAIRS = ["BTC-USDT","ETH-USDT","SOL-USDT","BNB-USDT","XRP-USDT","DOGE-USDT","MATIC-USDT","ARB-USDT","LINK-USDT","ADA-USDT","AVAX-USDT","DOT-USDT","OP-USDT","TRX-USDT"];
 
@@ -127,6 +128,76 @@ function scheduleBinanceReconnect() {
   setTimeout(connectBinance, 6000);
 }
 
+// ── Bybit Public WebSocket (spot tickers) ─────────────────────────────────
+const BYBIT_PAIRS = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "XRPUSDT", "BNBUSDT", "DOGEUSDT"];
+let bybitWs: WebSocket | null = null;
+
+function connectBybit() {
+  if (bybitWs && (bybitWs.readyState === WebSocket.OPEN || bybitWs.readyState === WebSocket.CONNECTING)) return;
+
+  try { bybitWs = new WebSocket(BYBIT_WS_URL); } catch { scheduleBybitReconnect(); return; }
+
+  bybitWs.on("open", () => {
+    logger.info("Bybit WS bağlandı");
+    broadcast({ type: "bybit_status", connected: true });
+    bybitWs!.send(JSON.stringify({
+      op: "subscribe",
+      args: BYBIT_PAIRS.map((sym) => `tickers.${sym}`),
+    }));
+    // Ping her 20 saniyede bir
+    const pingInterval = setInterval(() => {
+      if (bybitWs?.readyState === WebSocket.OPEN) {
+        bybitWs.send(JSON.stringify({ op: "ping" }));
+      }
+    }, 20000);
+    (bybitWs as WebSocket & { _pingInterval?: ReturnType<typeof setInterval> })._pingInterval = pingInterval;
+  });
+
+  bybitWs.on("message", (raw) => {
+    try {
+      const msg = JSON.parse(raw.toString()) as Record<string, unknown>;
+      if (msg["op"] === "pong") return;
+      if (msg["topic"] && (msg["topic"] as string).startsWith("tickers.") && msg["data"]) {
+        const d = msg["data"] as Record<string, string>;
+        const sym    = (d["symbol"] as string) ?? "";
+        const px     = parseFloat(d["lastPrice"] as string);
+        const open   = parseFloat(d["prevPrice24h"] as string);
+        const high   = parseFloat(d["highPrice24h"] as string);
+        const low    = parseFloat(d["lowPrice24h"] as string);
+        const vol    = parseFloat(d["turnover24h"] as string);
+        const change = open > 0 ? (px - open) / open : 0;
+        if (sym && px > 0) {
+          broadcast({
+            type: "tick",
+            ex:   "bybit",
+            sym,
+            px,
+            vol24h:  vol,
+            high24h: high,
+            low24h:  low,
+            change,
+            ts: Date.now(),
+          });
+        }
+      }
+    } catch { /* ignore malformed */ }
+  });
+
+  bybitWs.on("close", () => {
+    const typed = bybitWs as WebSocket & { _pingInterval?: ReturnType<typeof setInterval> };
+    if (typed?._pingInterval) clearInterval(typed._pingInterval);
+    logger.warn("Bybit WS kapandı, yeniden bağlanılıyor…");
+    broadcast({ type: "bybit_status", connected: false });
+    bybitWs = null;
+    scheduleBybitReconnect();
+  });
+  bybitWs.on("error", (e) => logger.error({ err: e }, "Bybit WS hata"));
+}
+
+function scheduleBybitReconnect() {
+  setTimeout(connectBybit, 7000);
+}
+
 function broadcast(payload: Record<string, unknown>) {
   const msg = JSON.stringify(payload);
   for (const client of clients) {
@@ -160,28 +231,11 @@ export function initWsHub(server: Server) {
 
   connectOKX();
   connectBinance();
+  connectBybit();
 
-  // Simüle tick'ler (Bybit için — Binance artık gerçek WS'den geliyor)
-  // Sadece Bybit simüle ediliyor — Binance artık gerçek WS'den, OKX de gerçek WS'den geliyor
-  const SIM_PAIRS = [
-    { ex:"bybit", sym:"BTCUSDT",  base:67415 },
-    { ex:"bybit", sym:"ETHUSDT",  base:3518  },
-    { ex:"bybit", sym:"SOLUSDT",  base:177.8 },
-    { ex:"bybit", sym:"XRPUSDT",  base:0.623 },
-    { ex:"bybit", sym:"BNBUSDT",  base:604   },
-    { ex:"bybit", sym:"DOGEUSDT", base:0.165 },
-  ];
-  const prices: Record<string, number> = {};
-  for (const p of SIM_PAIRS) prices[`${p.ex}:${p.sym}`] = p.base;
-
-  setInterval(() => {
-    const pair = SIM_PAIRS[Math.floor(Math.random() * SIM_PAIRS.length)];
-    const key  = `${pair.ex}:${pair.sym}`;
-    const prev = prices[key] ?? pair.base;
-    const next = prev * (1 + (Math.random() - 0.495) * 0.0018);
-    prices[key] = next;
-    broadcast({ type:"tick", ex:pair.ex, sym:pair.sym, px:Number(next.toFixed(6)), ts:Date.now() });
-  }, 500);
+  // Bybit artık gerçek WS'den geliyor (connectBybit)
+  // OKX ve Binance da gerçek WS'den geliyor
+  // Simülasyon kaldırıldı — tüm tick'ler gerçek borsalardan
 
   // ── Sinyal üreteci — 3s döngü ─────────────────────────────────────────
   const STRATEGIES = ["BTC Scalper","ETH Momentum","SOL Mean Rev","BTC/ETH Grid","Breakout Hunter","DCA Engine","Perp Arbitrage"];

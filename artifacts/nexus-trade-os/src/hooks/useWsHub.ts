@@ -51,6 +51,12 @@ export function useWsHub() {
               return;
             }
 
+            // Bybit WS bağlantı durumu
+            if (msg.type === "bybit_status") {
+              if (msg.connected) setOkxConnected(true);
+              return;
+            }
+
             if (msg.type === "pong") return;
 
             if (msg.type === "tick") {

@@ -17,6 +17,7 @@ import Audit from "@/pages/admin/Audit";
 import TelegramSettings from "@/pages/admin/TelegramSettings";
 import SystemSettings from "@/pages/admin/SystemSettings";
 import Plugins from "@/pages/admin/Plugins";
+import SystemStatus from "@/pages/admin/SystemStatus";
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const token = useStore((s) => s.token);
@@ -72,6 +73,9 @@ function Router() {
       </Route>
       <Route path="/admin/plugins">
         {() => <PrivateRoute><Plugins /></PrivateRoute>}
+      </Route>
+      <Route path="/admin/system-status">
+        {() => <PrivateRoute><SystemStatus /></PrivateRoute>}
       </Route>
       <Route>
         {() => <Redirect to="/" />}

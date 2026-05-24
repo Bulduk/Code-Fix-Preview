@@ -1,19 +1,20 @@
 import { Link } from "wouter";
 import {
   Server, BarChart2, Users, FileText, MessageSquare,
-  Shield, Settings, Anchor,
+  Shield, Settings, Anchor, Monitor,
 } from "lucide-react";
 import { useStore } from "@/lib/store";
 
 const cards = [
-  { href: "/admin/exchanges",  title: "Borsalar",        desc: "Spot/Futures/Perp — CCXT Pro, edit & test",         icon: Server,       color: "bg-blue-100 text-blue-700"   },
-  { href: "/admin/strategies", title: "Stratejiler",     desc: "Kod editörü, SL/TP, LLM, borsa atama",             icon: BarChart2,     color: "bg-purple-100 text-purple-700"},
-  { href: "/agents",           title: "AI Ajanlar",      desc: "Claude · Gemini · GPT · Nautilus — LangGraph",     icon: Anchor,        color: "bg-teal-100 text-teal-700"   },
-  { href: "/risk",             title: "Risk Yöneticisi", desc: "Pozisyon limitleri, Rust engine doğrulama",          icon: Shield,        color: "bg-red-100 text-red-700"     },
-  { href: "/admin/telegram",   title: "Telegram",        desc: "Human-in-the-loop onay mekanizması",               icon: MessageSquare, color: "bg-sky-100 text-sky-700"     },
-  { href: "/admin/settings",   title: "Sistem Ayarları", desc: "LLM, gecikme, paper trading, ilk kurulum",          icon: Settings,      color: "bg-amber-100 text-amber-700" },
-  { href: "/admin/users",      title: "Kullanıcılar",    desc: "RBAC rolleri, 2FA, erişim yönetimi",                icon: Users,         color: "bg-orange-100 text-orange-700"},
-  { href: "/admin/audit",      title: "Audit Log",       desc: "Sistem aksiyonları ve değişiklik geçmişi",          icon: FileText,      color: "bg-slate-100 text-slate-700" },
+  { href: "/admin/exchanges",      title: "Borsalar",        desc: "Spot/Futures/Perp — CCXT Pro, edit & test",         icon: Server,       color: "bg-blue-100 text-blue-700"   },
+  { href: "/admin/strategies",     title: "Stratejiler",     desc: "Kod editörü, SL/TP, LLM, borsa atama",             icon: BarChart2,     color: "bg-purple-100 text-purple-700"},
+  { href: "/agents",               title: "AI Ajanlar",      desc: "Claude · Gemini · GPT · Nautilus — LangGraph",     icon: Anchor,        color: "bg-teal-100 text-teal-700"   },
+  { href: "/risk",                 title: "Risk Yöneticisi", desc: "Pozisyon limitleri, Rust engine doğrulama",          icon: Shield,        color: "bg-red-100 text-red-700"     },
+  { href: "/admin/telegram",       title: "Telegram",        desc: "Human-in-the-loop onay mekanizması",               icon: MessageSquare, color: "bg-sky-100 text-sky-700"     },
+  { href: "/admin/settings",       title: "Sistem Ayarları", desc: "LLM, gecikme, paper trading, ilk kurulum",          icon: Settings,      color: "bg-amber-100 text-amber-700" },
+  { href: "/admin/users",          title: "Kullanıcılar",    desc: "RBAC rolleri, 2FA, erişim yönetimi",                icon: Users,         color: "bg-orange-100 text-orange-700"},
+  { href: "/admin/audit",          title: "Audit Log",       desc: "Sistem aksiyonları ve değişiklik geçmişi",          icon: FileText,      color: "bg-slate-100 text-slate-700" },
+  { href: "/admin/system-status",  title: "VPS Durumu",      desc: "API sağlığı, DB, RAM, CPU, exchange bağlantıları",  icon: Monitor,       color: "bg-green-100 text-green-700" },
 ];
 
 export default function Admin() {

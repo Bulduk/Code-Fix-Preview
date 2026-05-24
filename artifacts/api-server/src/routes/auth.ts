@@ -97,6 +97,41 @@ router.get("/me", requireAuth, (req, res) => {
   res.json({ userId: req.user!.userId, email: req.user!.email, role: req.user!.role });
 });
 
+// POST /api/auth/change-password — şifre değiştir
+router.post("/change-password", requireAuth, async (req, res) => {
+  const { currentPassword, newPassword } = req.body as { currentPassword: string; newPassword: string };
+  if (!currentPassword || !newPassword) {
+    res.status(400).json({ error: "currentPassword ve newPassword gerekli" });
+    return;
+  }
+  if (newPassword.length < 8) {
+    res.status(400).json({ error: "Yeni şifre en az 8 karakter olmalı" });
+    return;
+  }
+  try {
+    const rows = await db.select().from(usersTable).where(eq(usersTable.id, req.user!.userId)).limit(1);
+    const user = rows[0];
+    if (!user) {
+      // Mock fallback
+      const mockUser = MOCK_USERS.find((u) => u.id === req.user!.userId);
+      if (!mockUser) { res.status(404).json({ error: "Kullanıcı bulunamadı" }); return; }
+      const ok = await bcrypt.compare(currentPassword, mockUser.passwordHash);
+      if (!ok) { res.status(401).json({ error: "Mevcut şifre yanlış" }); return; }
+      mockUser.passwordHash = await bcrypt.hash(newPassword, 10);
+      res.json({ ok: true, message: "Şifre güncellendi" });
+      return;
+    }
+    const ok = await bcrypt.compare(currentPassword, user.passwordHash);
+    if (!ok) { res.status(401).json({ error: "Mevcut şifre yanlış" }); return; }
+    const newHash = await bcrypt.hash(newPassword, 12);
+    await db.update(usersTable).set({ passwordHash: newHash }).where(eq(usersTable.id, user.id));
+    res.json({ ok: true, message: "Şifre güncellendi" });
+  } catch (err) {
+    req.log.error({ err }, "change-password error");
+    res.status(500).json({ error: "Şifre güncellenemedi" });
+  }
+});
+
 // GET /api/auth/users — admin only
 router.get("/users", requireAuth, requireAdmin, async (_req, res) => {
   try {
